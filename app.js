@@ -10,7 +10,7 @@ document.getElementById('calculateBtn').addEventListener('click', async () => {
     }
 
     try {
-        scoreElement.textContent = '...';
+        if (scoreElement) scoreElement.textContent = '...';
         
         const response = await fetch(`${API_ENDPOINT}?postcode=${encodeURIComponent(postcodeInput)}`);
         const result = await response.json();
@@ -20,17 +20,18 @@ document.getElementById('calculateBtn').addEventListener('click', async () => {
         }
 
         const { data } = result;
-
-        // Update the circular gauge with the real rating or calculated score
         const rating = data.scores.current_hrr_score;
-        scoreElement.textContent = rating;
+        
+        if (scoreElement) {
+            scoreElement.textContent = rating;
+        } else {
+            console.warn("Element with ID 'scoreValue' is missing from index.html");
+        }
 
-        // Log successful data transmission
-        console.log("Loaded official property data:", data);
+        console.log("Official Data Received:", data);
 
     } catch (error) {
         console.error('Fetch error:', error);
         alert(`Error: ${error.message}`);
-        scoreElement.textContent = 'ERR';
     }
 });
