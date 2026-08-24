@@ -257,7 +257,7 @@ async function fetchLiveGridHeadroom(lat, lon) {
  */
 async function fetchSpenHeatmapHeadroom(lat, lon) {
   const endpoint = process.env.SPEN_HEATMAP_API_URL || DEFAULT_SPEN_HEATMAP_URL;
-  const point = `geom'POINT(${lon} ${lat})'`;
+  const point = `geometry'POINT(${lon} ${lat})'`;
   const params = new URLSearchParams({
     where: `within_distance(geo_point,${point},25000)`,
     limit: '100'
