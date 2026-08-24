@@ -1,22 +1,16 @@
 :root {
-    /* Typography */
-    --font-heading: 'Manrope', sans-serif;
-    --font-body: 'Nunito Sans', sans-serif;
+    --font-heading: 'Sora', sans-serif, 'Noto Sans';
+    --font-body: 'Google Sans', sans-serif, 'Noto Sans';
     
-    /* Core Color Palette (Light Neumorphic / Glassmorphic Base) */
-    --bg-color: #e0e5ec;
-    --text-main: #2d3748;
-    --text-muted: #718096;
-    --accent-green: #48bb78;
-    --accent-red: #f56565;
+    --bg-color: #e4eaf5;
+    --glass-bg: rgba(228, 234, 245, 0.85);
+    --text-main: #1e293b;
+    --text-muted: #64748b;
+    --accent-green: #10b981;
     
-    /* Neumorphic Shadows */
     --shadow-light: #ffffff;
-    --shadow-dark: #a3b1c6;
-    
-    /* Glassmorphic Effects */
-    --glass-bg: rgba(255, 255, 255, 0.4);
-    --glass-border: rgba(255, 255, 255, 0.6);
+    --shadow-dark: #b8c7e0;
+    --neu-inset-dark: #cbd5e1;
 }
 
 * {
@@ -29,51 +23,297 @@ body {
     font-family: var(--font-body);
     background-color: var(--bg-color);
     color: var(--text-main);
-    min-height: 100vh;
+    padding: 1.5rem;
     display: flex;
     justify-content: center;
-    padding: 2rem;
 }
 
-/* Typography Classes */
-h1, h2, .score-main, .metric-value {
-    font-family: var(--font-heading);
-    font-weight: 800;
-}
-
-.panel-title {
-    font-size: 1.1rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 1.5rem;
-}
-
-/* Glassmorphic Panels */
-.glass-panel {
-    background: var(--glass-bg);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid var(--glass-border);
-    border-radius: 24px;
-    padding: 2rem;
-    box-shadow: 8px 8px 16px var(--shadow-dark), 
-               -8px -8px 16px var(--shadow-light);
-}
-
-/* Layout Grid */
 .app-container {
     width: 100%;
-    max-width: 1200px;
+    max-width: 1100px;
     display: flex;
     flex-direction: column;
-    gap: 2rem;
+    gap: 1.5rem;
+}
+
+/* Opalescent Glass & Neumorphic Depth */
+.glass-panel {
+    background: linear-gradient(135deg, rgba(255,255,255,0.6) 0%, rgba(228,234,245,0.8) 100%);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 24px;
+    padding: 1.5rem;
+    box-shadow: 10px 10px 20px var(--shadow-dark), 
+               -10px -10px 20px var(--shadow-light);
+}
+
+.top-search-bar {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    padding: 1rem 1.5rem;
+}
+
+.search-input-wrapper {
+    flex: 1;
+    background: var(--bg-color);
+    border-radius: 16px;
+    padding: 0.2rem 1rem;
+    box-shadow: inset 4px 4px 8px var(--neu-inset-dark), 
+                inset -4px -4px 8px var(--shadow-light);
+}
+
+.search-input-wrapper input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    padding: 0.8rem 0;
+    font-family: var(--font-body);
+    font-size: 1rem;
+    color: var(--text-main);
+    outline: none;
+}
+
+.neumorphic-btn-primary {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: none;
+    padding: 0.9rem 1.6rem;
+    border-radius: 16px;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    cursor: pointer;
+    box-shadow: 4px 4px 12px rgba(16, 185, 129, 0.35),
+               -4px -4px 12px #ffffff;
+    transition: transform 0.1s ease;
+}
+
+.neumorphic-btn-primary:active {
+    transform: scale(0.98);
 }
 
 .dashboard-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 2rem;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1.5rem;
 }
 
-/* Add further detailed styling for dials, toggles, and inputs here as we refine the UI */
+@media(max-width: 900px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.panel-title {
+    font-family: var(--font-heading);
+    font-size: 0.85rem;
+    font-weight: 800;
+    letter-spacing: 0.75px;
+    color: var(--text-main);
+}
+
+.card-subtitle {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    display: block;
+    margin-bottom: 1.2rem;
+}
+
+/* HEETSA Dial Styling */
+.score-panel {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.neumorphic-dial {
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    background: var(--bg-color);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 1rem 0 0.4rem 0;
+    box-shadow: inset 6px 6px 12px var(--neu-inset-dark),
+                inset -6px -6px 12px var(--shadow-light),
+                6px 6px 12px var(--shadow-dark),
+                -6px -6px 12px var(--shadow-light);
+    border: 6px solid var(--accent-green);
+}
+
+.score-main {
+    font-family: var(--font-heading);
+    font-size: 2.4rem;
+    font-weight: 800;
+    color: var(--text-main);
+    line-height: 1;
+}
+
+.score-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+    font-weight: 700;
+}
+
+.demand-sub {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--accent-green);
+    margin-top: 0.4rem;
+}
+
+/* Existing Work & Actions */
+.work-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.7rem 0;
+    border-bottom: 1px solid rgba(184, 199, 224, 0.4);
+    font-size: 0.85rem;
+}
+
+.dot {
+    width: 8px;
+    height: 8px;
+    background-color: var(--accent-green);
+    border-radius: 50%;
+    box-shadow: inset 1px 1px 2px rgba(0,0,0,0.1);
+}
+
+.work-name {
+    flex: 1;
+    margin-left: 0.8rem;
+    font-weight: 500;
+}
+
+.work-score {
+    font-family: var(--font-heading);
+    font-weight: 700;
+}
+
+.action-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 1.1rem 0;
+    font-size: 0.85rem;
+}
+
+.action-title {
+    font-weight: 600;
+    display: block;
+}
+
+.action-tag.green {
+    color: var(--accent-green);
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.score-gain {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    color: var(--accent-green);
+    font-size: 0.8rem;
+}
+
+/* Toggle Switch */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.switch input { opacity: 0; width: 0; height: 0; }
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: var(--bg-color);
+    transition: .3s;
+    border-radius: 24px;
+    box-shadow: inset 3px 3px 6px var(--neu-inset-dark),
+                inset -3px -3px 6px var(--shadow-light);
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .3s;
+    border-radius: 50%;
+    box-shadow: 2px 2px 4px rgba(0,0,0,0.15);
+}
+
+input:checked + .slider { background-color: var(--accent-green); }
+input:checked + .slider:before { transform: translateX(20px); }
+
+/* Climate Charts */
+.charts-container {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 1.2rem;
+    gap: 1rem;
+}
+
+.chart-group { flex: 1; }
+.chart-group h4 {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 0.8rem;
+}
+
+.bars-flex {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    height: 90px;
+    padding: 0.5rem;
+    background: var(--bg-color);
+    border-radius: 12px;
+    box-shadow: inset 3px 3px 6px var(--neu-inset-dark),
+                inset -3px -3px 6px var(--shadow-light);
+}
+
+.bar-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.bar { width: 14px; background: linear-gradient(180deg, #10b981 0%, #059669 100%); border-radius: 4px; }
+.bar.small { width: 12px; }
+.bar-col span, .bar-col small { font-size: 0.6rem; color: var(--text-muted); }
+
+.divider-vertical { width: 1px; background: rgba(184, 199, 224, 0.6); margin: 0 1rem; }
+.summer-split { display: flex; gap: 1rem; }
+.sub-chart { flex: 1; }
+.mini-label { font-size: 0.7rem; color: var(--text-muted); display: block; margin-bottom: 0.4rem; }
+
+/* Navigation */
+.neumorphic-nav {
+    display: flex;
+    justify-content: space-around;
+    padding: 0.8rem 1rem;
+}
+
+.nav-item {
+    text-decoration: none;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-family: var(--font-heading);
+    font-weight: 700;
+}
+
+.nav-item.active { color: var(--accent-green); }
