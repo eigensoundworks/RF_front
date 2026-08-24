@@ -1,7 +1,7 @@
 const API_ENDPOINT = 'https://rf-back.vercel.app/api/heetsa';
 
 const postcodeInput = document.getElementById('postcodeInput');
-const calculateBtn = document.getElementById('calculateBtn');
+const addressDropdown = document.getElementById('addressDropdown');
 const hrrScoreEl = document.getElementById('hrrScore');
 const heatDemandEl = document.getElementById('heatDemand');
 const epcMetaEl = document.getElementById('epcMeta'); 
@@ -9,58 +9,68 @@ const toggleASHP = document.getElementById('toggleASHP');
 const ashpGatekeeper = document.getElementById('ashpGatekeeper');
 const dialContainer = document.getElementById('dialContainer');
 
+let debounceTimer;
 let activePhysics = null;
-let gridCapacity = 100;
-let winterTemp = 0;
-let selectedAddressData = null;
+let gridCapacity = 88;
+let winterTemp = -3.8;
 
-// --- STEP 1: Google Maps Autocomplete Initialization ---
-function initAutocomplete() {
-    if (!postcodeInput) return;
-    
-    const autocomplete = new google.maps.places.Autocomplete(postcodeInput, {
-        componentRestrictions: { country: 'gb' }, // Restrict to UK
-        fields: ['formatted_address', 'geometry', 'address_components']
-    });
-
-    autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace();
-        if (!place.geometry || !place.geometry.location) {
-            alert("Please select a valid address from the dropdown.");
-            return;
-        }
-
-        selectedAddressData = {
-            address: place.formatted_address,
-            lat: place.geometry.location.lat(),
-            lon: place.geometry.location.lng()
-        };
-
-        // Automatically load property physics once an address is clicked from Google
-        loadPropertyFromGoogle(selectedAddressData);
-    });
-}
-window.initAutocomplete = initAutocomplete;
-
-// Fallback if they hit the calculate button manually without clicking the dropdown
-calculateBtn.addEventListener('click', () => {
-    if (selectedAddressData) {
-        loadPropertyFromGoogle(selectedAddressData);
-    } else {
-        alert("Please type and select a precise address from the Google dropdown suggestions.");
+// --- STEP 1: Predictive Address & Apartment Search ---
+postcodeInput.addEventListener('input', (e) => {
+    clearTimeout(debounceTimer);
+    const val = e.target.value.trim();
+    if (val.length >= 3) {
+        debounceTimer = setTimeout(() => fetchPredictions(val), 300);
+    } else if (addressDropdown) {
+        addressDropdown.classList.add('hidden');
     }
 });
 
-// --- STEP 2: Load Property via Google Coordinates ---
-async function loadPropertyFromGoogle(locData) {
-    hrrScoreEl.textContent = '...';
-    epcMetaEl.textContent = `Analyzing ${locData.address}...`;
-
+async function fetchPredictions(query) {
+    if (!addressDropdown) return;
     try {
-        const response = await fetch(`${API_ENDPOINT}?address=${encodeURIComponent(locData.address)}&lat=${locData.lat}&lon=${locData.lon}`);
+        const response = await fetch(`${API_ENDPOINT}?search=${encodeURIComponent(query)}`);
         const result = await response.json();
         
-        if (!response.ok || !result.success) throw new Error(result.error || "Failed to calculate physics.");
+        if (result.addresses && result.addresses.length > 0) {
+            addressDropdown.innerHTML = '';
+            result.addresses.forEach(item => {
+                const li = document.createElement('li');
+                li.textContent = item.address;
+                li.onclick = () => {
+                    postcodeInput.value = item.address;
+                    addressDropdown.classList.add('hidden');
+                    loadSelectedProperty(item.address);
+                };
+                addressDropdown.appendChild(li);
+            });
+            addressDropdown.classList.remove('hidden');
+        } else {
+            addressDropdown.classList.add('hidden');
+        }
+    } catch (error) {
+        console.error("Prediction error:", error);
+    }
+}
+
+// Hide dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    if (addressDropdown && !e.target.closest('.search-input-wrapper')) {
+        addressDropdown.classList.add('hidden');
+    }
+});
+
+// --- STEP 2: Load Selected Property Physics ---
+async function loadSelectedProperty(address) {
+    hrrScoreEl.textContent = '...';
+    epcMetaEl.textContent = `Matching EPC & running HEETSA for ${address}...`;
+
+    try {
+        const response = await fetch(`${API_ENDPOINT}?address=${encodeURIComponent(address)}`);
+        const result = await response.json();
+        
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || "Failed to calculate physics.");
+        }
         
         activePhysics = result.data.physics;
         const activePropertyType = result.data.property_type || "house";
@@ -71,7 +81,7 @@ async function loadPropertyFromGoogle(locData) {
         document.getElementById('gridHeadroom').textContent = `${gridCapacity}%`;
         document.getElementById('rainExposure').textContent = "Severe (West Coast)";
 
-        // Hide impossible toggles based on building type
+        // Hide impossible toggles (e.g., ground floor flats don't get loft insulation)
         document.querySelectorAll('.action-row').forEach(row => row.style.display = 'flex'); 
         if (activePropertyType.includes('ground floor') || activePropertyType.includes('mid floor')) {
             const loftToggle = document.getElementById('toggleLoft');
@@ -87,6 +97,7 @@ async function loadPropertyFromGoogle(locData) {
         console.error("Property load error:", error);
         alert(`API Error: ${error.message}`);
         hrrScoreEl.textContent = 'ERR';
+        epcMetaEl.textContent = 'Connection Failed.';
     }
 }
 
@@ -136,7 +147,7 @@ function updateUI(demand) {
     if (demand > 70) {
         lockHeatPump(`🔒 Requires Demand ≤ 70 kWh/m²`);
     } else if (gridCapacity < 85) {
-        lockHeatPump(`🔒 SPEN Grid Constrained`);
+        lockHeatPump(`🔒 SPEN Grid Constrained (${gridCapacity}% Cap)`);
     } else {
         toggleASHP.disabled = false;
         toggleASHP.closest('.switch').classList.remove('disabled-switch');
@@ -146,6 +157,7 @@ function updateUI(demand) {
 }
 
 function lockHeatPump(message) {
+    if (!toggleASHP || !ashpGatekeeper) return;
     toggleASHP.disabled = true;
     toggleASHP.checked = false;
     toggleASHP.closest('.switch').classList.add('disabled-switch');
@@ -155,21 +167,19 @@ function lockHeatPump(message) {
 
 function updateCharts(annualDemandKwh, newHTC) {
     const totalHeatingKwh = annualDemandKwh * activePhysics.osFloorArea;
-    const dec = Math.round(totalHeatingKwh * 0.18);
-    const jan = Math.round(totalHeatingKwh * 0.20);
-    const feb = Math.round(totalHeatingKwh * 0.16);
-    const mar = Math.round(totalHeatingKwh * 0.12);
+    const winterKwh = Math.round(totalHeatingKwh * 0.65);
+    const summerGainKwh = Math.round((activePhysics.osFloorArea * 1.5) + (150 - newHTC));
 
-    document.getElementById('valDec').textContent = `${dec}kWh`;
-    document.getElementById('valJan').textContent = `${jan}kWh`;
-    document.getElementById('valFeb').textContent = `${feb}kWh`;
-    document.getElementById('valMar').textContent = `${mar}kWh`;
+    const valWinter = document.getElementById('valWinter');
+    const valSummer = document.getElementById('valSummer');
+    const barWinter = document.getElementById('barWinter');
+    const barSummer = document.getElementById('barSummer');
 
-    const maxWinter = Math.max(dec, jan, feb, mar) || 1;
-    document.getElementById('barDec').style.height = `${(dec / maxWinter) * 80}px`;
-    document.getElementById('barJan').style.height = `${(jan / maxWinter) * 80}px`;
-    document.getElementById('barFeb').style.height = `${(feb / maxWinter) * 80}px`;
-    document.getElementById('barMar').style.height = `${(mar / maxWinter) * 80}px`;
+    if (valWinter) valWinter.textContent = `${winterKwh} kWh`;
+    if (barWinter) barWinter.style.height = `${Math.min(100, (winterKwh / 5000) * 100)}px`;
+
+    if (valSummer) valSummer.textContent = `${summerGainKwh} kWh`;
+    if (barSummer) barSummer.style.height = `${Math.min(100, (summerGainKwh / 1500) * 100)}px`;
 }
 
 document.querySelectorAll('.switch input').forEach(toggle => {
