@@ -2,7 +2,6 @@ const API_ENDPOINT = 'https://rf-back.vercel.app/api/heetsa';
 
 const postcodeInput = document.getElementById('postcodeInput');
 const calculateBtn = document.getElementById('calculateBtn');
-const addressDropdown = document.getElementById('addressDropdown');
 const hrrScoreEl = document.getElementById('hrrScore');
 const heatDemandEl = document.getElementById('heatDemand');
 const epcMetaEl = document.getElementById('epcMeta'); 
@@ -10,80 +9,73 @@ const toggleASHP = document.getElementById('toggleASHP');
 const ashpGatekeeper = document.getElementById('ashpGatekeeper');
 const dialContainer = document.getElementById('dialContainer');
 
-let debounceTimer;
 let activePhysics = null;
-let activePropertyType = "";
 let gridCapacity = 100;
 let winterTemp = 0;
+let selectedAddressData = null;
 
-postcodeInput.addEventListener('input', (e) => {
-    clearTimeout(debounceTimer);
-    const val = e.target.value.trim();
-    if (val.length >= 5) {
-        debounceTimer = setTimeout(() => fetchAddressList(val), 500);
-    } else {
-        addressDropdown.classList.add('hidden');
-    }
-});
+// --- STEP 1: Google Maps Autocomplete Initialization ---
+function initAutocomplete() {
+    if (!postcodeInput) return;
+    
+    const autocomplete = new google.maps.places.Autocomplete(postcodeInput, {
+        componentRestrictions: { country: 'gb' }, // Restrict to UK
+        fields: ['formatted_address', 'geometry', 'address_components']
+    });
 
-async function fetchAddressList(postcode) {
-    try {
-        const response = await fetch(`${API_ENDPOINT}?postcode=${encodeURIComponent(postcode)}`);
-        const result = await response.json();
-        
-        if (result.addresses && result.addresses.length > 0) {
-            addressDropdown.innerHTML = '';
-            result.addresses.forEach(addr => {
-                const li = document.createElement('li');
-                li.textContent = addr.address;
-                li.onclick = () => loadSpecificProperty(postcode, addr.address);
-                addressDropdown.appendChild(li);
-            });
-            addressDropdown.classList.remove('hidden');
+    autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+        if (!place.geometry || !place.geometry.location) {
+            alert("Please select a valid address from the dropdown.");
+            return;
         }
-    } catch (error) { 
-        console.error("Autocomplete error:", error); 
-    }
+
+        selectedAddressData = {
+            address: place.formatted_address,
+            lat: place.geometry.location.lat(),
+            lon: place.geometry.location.lng()
+        };
+
+        // Automatically load property physics once an address is clicked from Google
+        loadPropertyFromGoogle(selectedAddressData);
+    });
 }
+window.initAutocomplete = initAutocomplete;
 
-document.addEventListener('click', (e) => {
-    if (!e.target.closest('.search-input-wrapper')) {
-        addressDropdown.classList.add('hidden');
-    }
-});
-
+// Fallback if they hit the calculate button manually without clicking the dropdown
 calculateBtn.addEventListener('click', () => {
-    const val = postcodeInput.value.trim();
-    if (val.length >= 5) {
-        loadSpecificProperty(val, val);
+    if (selectedAddressData) {
+        loadPropertyFromGoogle(selectedAddressData);
     } else {
-        alert("Please enter a valid Scottish postcode.");
+        alert("Please type and select a precise address from the Google dropdown suggestions.");
     }
 });
 
-async function loadSpecificProperty(postcode, address) {
-    addressDropdown.classList.add('hidden');
+// --- STEP 2: Load Property via Google Coordinates ---
+async function loadPropertyFromGoogle(locData) {
     hrrScoreEl.textContent = '...';
-    epcMetaEl.textContent = 'Contacting HEETSA Engine...';
+    epcMetaEl.textContent = `Analyzing ${locData.address}...`;
 
     try {
-        const response = await fetch(`${API_ENDPOINT}?postcode=${encodeURIComponent(postcode)}&address=${encodeURIComponent(address)}`);
+        const response = await fetch(`${API_ENDPOINT}?address=${encodeURIComponent(locData.address)}&lat=${locData.lat}&lon=${locData.lon}`);
         const result = await response.json();
         
-        if (!response.ok || !result.success) throw new Error(result.error || "Failed to load.");
+        if (!response.ok || !result.success) throw new Error(result.error || "Failed to calculate physics.");
         
         activePhysics = result.data.physics;
-        activePropertyType = result.data.property_type || "house";
+        const activePropertyType = result.data.property_type || "house";
         gridCapacity = result.data.grid.headroom_pct;
         winterTemp = result.data.weather.winter_design_temp;
 
         document.getElementById('designTemp').textContent = `${winterTemp}°C`;
         document.getElementById('gridHeadroom').textContent = `${gridCapacity}%`;
-        document.getElementById('rainExposure').textContent = "Severe";
+        document.getElementById('rainExposure').textContent = "Severe (West Coast)";
 
+        // Hide impossible toggles based on building type
         document.querySelectorAll('.action-row').forEach(row => row.style.display = 'flex'); 
         if (activePropertyType.includes('ground floor') || activePropertyType.includes('mid floor')) {
-            document.getElementById('toggleLoft').closest('.action-row').style.display = 'none';
+            const loftToggle = document.getElementById('toggleLoft');
+            if (loftToggle) loftToggle.closest('.action-row').style.display = 'none';
         }
         
         document.querySelectorAll('.switch input').forEach(el => el.checked = false);
@@ -110,8 +102,12 @@ function recalculateSandbox() {
     if (!activePhysics) return;
     let { volume, wallArea, roofArea, windowArea, uWall, uRoof, finalACH, osFloorArea } = activePhysics;
 
-    if (document.getElementById('toggleLoft').checked && roofArea > 0) uRoof = 0.11;
-    if (document.getElementById('toggleIWI').checked || document.getElementById('toggleEWI').checked) uWall = 0.3;
+    const toggleLoft = document.getElementById('toggleLoft');
+    const toggleIWI = document.getElementById('toggleIWI');
+    const toggleEWI = document.getElementById('toggleEWI');
+
+    if (toggleLoft && toggleLoft.checked && roofArea > 0) uRoof = 0.11;
+    if ((toggleIWI && toggleIWI.checked) || (toggleEWI && toggleEWI.checked)) uWall = 0.3;
 
     const newHTC = (volume * finalACH * 0.33) + (wallArea * uWall) + (roofArea * uRoof) + (windowArea * 2.0);
     let currentDemand = Math.round((newHTC * 2500 * 24 * 0.75) / 1000 / osFloorArea);
