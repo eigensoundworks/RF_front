@@ -1,0 +1,79 @@
+:root {
+    /* Typography */
+    --font-heading: 'Manrope', sans-serif;
+    --font-body: 'Nunito Sans', sans-serif;
+    
+    /* Core Color Palette (Light Neumorphic / Glassmorphic Base) */
+    --bg-color: #e0e5ec;
+    --text-main: #2d3748;
+    --text-muted: #718096;
+    --accent-green: #48bb78;
+    --accent-red: #f56565;
+    
+    /* Neumorphic Shadows */
+    --shadow-light: #ffffff;
+    --shadow-dark: #a3b1c6;
+    
+    /* Glassmorphic Effects */
+    --glass-bg: rgba(255, 255, 255, 0.4);
+    --glass-border: rgba(255, 255, 255, 0.6);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: var(--font-body);
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 2rem;
+}
+
+/* Typography Classes */
+h1, h2, .score-main, .metric-value {
+    font-family: var(--font-heading);
+    font-weight: 800;
+}
+
+.panel-title {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 1.5rem;
+}
+
+/* Glassmorphic Panels */
+.glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 24px;
+    padding: 2rem;
+    box-shadow: 8px 8px 16px var(--shadow-dark), 
+               -8px -8px 16px var(--shadow-light);
+}
+
+/* Layout Grid */
+.app-container {
+    width: 100%;
+    max-width: 1200px;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+}
+
+/* Add further detailed styling for dials, toggles, and inputs here as we refine the UI */
