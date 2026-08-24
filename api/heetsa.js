@@ -1,10 +1,8 @@
 const DEFAULT_SPEN_HEATMAP_URL =
   'https://spenergynetworks.opendatasoft.com/api/explore/v2.1/catalog/datasets/distribution-capacity-heatmaps-spd/records';
-const EPC_SCOT_BASE_URL =
-  process.env.EPC_SCOT_API_BASE_URL || 'https://api.epcdata.scot';
-const EPC_SCOT_EW_PATH = '/ew-compatible';
 
-const SCOTTISH_POSTCODE_PREFIX = /^(AB|DD|DG|EH|FK|G|HS|IV|KA|KW|KY|ML|PA|PH|TD|ZE)\b/i;
+const EPC_SCOT_BASE_URL = process.env.EPC_SCOT_API_BASE_URL || 'https://api.epcdata.scot';
+const EPC_SCOT_EW_PATH = '/ew-compatible';
 
 function normalizeText(value) {
   return (value || '').toString().toUpperCase().replace(/\s+/g, ' ').trim();
@@ -14,10 +12,6 @@ function extractPostcode(value) {
   const postcodeRegex = /[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}/i;
   const match = (value || '').match(postcodeRegex);
   return match ? normalizeText(match[0]) : '';
-}
-
-function isScottishPostcode(postcode) {
-  return SCOTTISH_POSTCODE_PREFIX.test(normalizeText(postcode || ''));
 }
 
 function getOsPlacesApiKey() {
@@ -122,9 +116,9 @@ async function fetchEpcScotPage(params) {
   if (!auth) return null;
 
   const url = new URL(`${EPC_SCOT_BASE_URL}${EPC_SCOT_EW_PATH}`);
-  Object.entries(params || {}).forEach(([k, v]) => {
+  for (const [k, v] of Object.entries(params || {})) {
     if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v));
-  });
+  }
 
   const res = await fetch(url.toString(), {
     headers: {
@@ -156,6 +150,7 @@ async function fetchEpcScotByUprn(uprn) {
     cursor = body?._meta?.cursor || null;
     if (!cursor) break;
   }
+
   return null;
 }
 
@@ -280,14 +275,14 @@ async function fetchSpenHeatmapHeadroom(lat, lon) {
       ? payload.records.map((item) => item?.record || item).filter(Boolean)
       : [];
 
-    const percentageKeys = [
+    const keys = [
       'headroom_pct', 'headroom_percent', 'headroom_percentage',
       'demand_headroom_pct', 'demand_headroom_percent',
       'available_capacity_pct', 'available_capacity_percent'
     ];
 
     const getNumber = (record) => {
-      for (const key of percentageKeys) {
+      for (const key of keys) {
         const value = Number(record[key]);
         if (Number.isFinite(value) && value >= 0 && value <= 100) return value;
       }
@@ -320,7 +315,6 @@ async function fetchSpenHeatmapHeadroom(lat, lon) {
 
     const candidates = records
       .map((record, index) => ({
-        record,
         index,
         headroomPct: getNumber(record),
         point: getPoint(record)
@@ -424,26 +418,22 @@ async function resolveCoordinates(postcode) {
 
   try {
     const year = new Date().getUTCFullYear() - 1;
-    const startDate = `${year}-01-01`;
-    const endDate = `${year}-12-31`;
-
     const weatherRes = await fetch(
-      `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${startDate}&end_date=${endDate}&hourly=wind_speed_10m&daily=precipitation_sum&timezone=UTC`
+      `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${year}-01-01&end_date=${year}-12-31&hourly=wind_speed_10m&daily=precipitation_sum&timezone=UTC`
     );
 
     if (weatherRes.ok) {
       const weatherData = await weatherRes.json();
 
       const speeds = weatherData?.hourly?.wind_speed_10m;
-      if (Array.isArray(speeds) && speeds.length > 0) {
-        const avg = speeds.reduce((a, b) => a + b, 0) / speeds.length;
-        windSpeedMs = avg / 3.6;
+      if (Array.isArray(speeds) && speeds.length) {
+        windSpeedMs = speeds.reduce((a, b) => a + b, 0) / speeds.length / 3.6;
         windVerified = true;
       }
 
-      const dailyRain = weatherData?.daily?.precipitation_sum;
-      if (Array.isArray(dailyRain) && dailyRain.length > 0) {
-        annualRainMm = dailyRain.reduce((a, b) => a + (Number(b) || 0), 0);
+      const rain = weatherData?.daily?.precipitation_sum;
+      if (Array.isArray(rain) && rain.length) {
+        annualRainMm = rain.reduce((a, b) => a + (Number(b) || 0), 0);
         rainVerified = true;
       }
     }
@@ -517,15 +507,7 @@ module.exports = async (req, res) => {
       return res.status(404).json({
         success: false,
         code: 'EPC_NO_MATCH',
-        error: 'No Scottish address matched in EPC dataset for selected address.'
-      });
-    }
-
-    if (!isScottishPostcode(resolved.postcode)) {
-      return res.status(404).json({
-        success: false,
-        code: 'OUTSIDE_SCOTLAND',
-        error: 'Matched address is outside Scotland.'
+        error: 'No EPC record matched the selected address.'
       });
     }
 
@@ -546,11 +528,8 @@ module.exports = async (req, res) => {
 
     const GRID_HEADROOM_BASE = 75;
     const GRID_HEADROOM_RANGE = 20;
-    const GRID_LAT_SCALE = 1000;
-    const GRID_LON_SCALE = 100;
-    const gridHash = Math.round(Math.abs(coords.lat) * GRID_LAT_SCALE + Math.abs(coords.lon) * GRID_LON_SCALE);
-    const estimatedGridHeadroomPct = GRID_HEADROOM_BASE + (gridHash % GRID_HEADROOM_RANGE);
-    const gridHeadroomPct = liveGrid ? liveGrid.headroomPct : estimatedGridHeadroomPct;
+    const hash = Math.round(Math.abs(coords.lat) * 1000 + Math.abs(coords.lon) * 100);
+    const estimatedGridHeadroomPct = GRID_HEADROOM_BASE + (hash % GRID_HEADROOM_RANGE);
 
     const standard = getApplicableStandard();
 
@@ -569,7 +548,10 @@ module.exports = async (req, res) => {
           rain_exposure: coords.rainExposure,
           annual_rainfall_mm: coords.annualRainMm
         },
-        grid: { headroom_pct: gridHeadroomPct, estimated: !liveGrid },
+        grid: {
+          headroom_pct: liveGrid ? liveGrid.headroomPct : estimatedGridHeadroomPct,
+          estimated: !liveGrid
+        },
         standard: {
           label: standard.label,
           applies_from: standard.appliesFrom,
