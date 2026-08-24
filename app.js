@@ -1,97 +1,133 @@
 const API_ENDPOINT = 'https://rf-back.vercel.app/api/heetsa';
 
-let currentBaselineDemand = 145;
-let currentRating = 'D';
-let debounceTimer;
-
-// DOM Elements
+// DOM Setup
 const postcodeInput = document.getElementById('postcodeInput');
-const calculateBtn = document.getElementById('calculateBtn');
+const dialContainer = document.getElementById('dialContainer');
 const hrrScoreEl = document.getElementById('hrrScore');
 const heatDemandEl = document.getElementById('heatDemand');
-const wallDescEl = document.getElementById('wallDesc');
-const floorAreaEl = document.getElementById('floorAreaVal');
-const dialContainer = document.querySelector('.neumorphic-dial');
+const epcMetaEl = document.getElementById('epcMeta');
 
-// Core Fetch Function
+// Gatekeeper Elements
+const toggleASHP = document.getElementById('toggleASHP');
+const ashpGatekeeper = document.getElementById('ashpGatekeeper');
+const toggleEWI = document.getElementById('toggleEWI');
+const ewiWarning = document.getElementById('ewiWarning');
+const iwiWarning = document.getElementById('iwiWarning');
+
+let debounceTimer;
+let activePhysics = null;
+
+// The Differential Physics Sandbox (sapjs derived)
+function recalculateSandbox() {
+    if (!activePhysics) return;
+
+    let { volume, wallArea, roofArea, windowArea, uWall, uRoof, finalACH, baseDemand } = activePhysics;
+
+    // Apply Fabric Interventions (Group A)
+    if (document.getElementById('toggleLoft').checked) uRoof = 0.11;
+    
+    // IWI and EWI both achieve standard solid wall target (0.3)
+    if (document.getElementById('toggleIWI').checked || document.getElementById('toggleEWI').checked) {
+        uWall = 0.3;
+    }
+
+    // Recalculate Heat Transfer Coefficient (HTC)
+    const ventLoss = volume * finalACH * 0.33;
+    const fabricLoss = (wallArea * uWall) + (roofArea * uRoof) + (windowArea * 2.0);
+    const newHTC = ventLoss + fabricLoss;
+
+    // Recalculate Demand (kWh/m²/yr)
+    const degreeDays = 2500;
+    let newDemand = Math.round((newHTC * degreeDays * 24 * 0.75) / 1000 / activePhysics.floorArea);
+
+    updateUI(newDemand);
+}
+
+function updateUI(demand) {
+    // 1. HRR Core Logic (Fabric Only)
+    // Pass = Demand <= 120 (Assuming C)
+    const isDemandFailing = demand > 120;
+    
+    // Determine theoretical band based on demand
+    let currentBand = 'E';
+    if (demand <= 80) currentBand = 'B';
+    else if (demand <= 120) currentBand = 'C';
+    else if (demand <= 180) currentBand = 'D';
+
+    hrrScoreEl.textContent = currentBand;
+    heatDemandEl.textContent = `${demand} kWh/m²/yr`;
+
+    if (isDemandFailing) {
+        hrrScoreEl.classList.add('text-fail');
+        dialContainer.classList.add('dial-fail');
+        heatDemandEl.classList.add('text-fail');
+    } else {
+        hrrScoreEl.classList.remove('text-fail');
+        dialContainer.classList.remove('dial-fail');
+        heatDemandEl.classList.remove('text-fail');
+    }
+
+    // 2. The Clean Heat Gatekeeper Logic
+    if (demand <= 70) {
+        toggleASHP.disabled = false;
+        toggleASHP.closest('.switch').classList.remove('disabled-switch');
+        ashpGatekeeper.textContent = "✓ Fabric threshold met";
+        ashpGatekeeper.style.color = "var(--accent-green)";
+    } else {
+        toggleASHP.disabled = true;
+        toggleASHP.checked = false;
+        toggleASHP.closest('.switch').classList.add('disabled-switch');
+        ashpGatekeeper.textContent = "🔒 Requires Demand ≤ 70 kWh/m²";
+        ashpGatekeeper.style.color = "var(--fail-red)";
+    }
+}
+
 async function fetchPropertyData(postcode) {
     if (!postcode || postcode.length < 5) return;
 
     try {
-        if (hrrScoreEl) {
-            hrrScoreEl.textContent = '...';
-            hrrScoreEl.classList.remove('text-fail');
-            dialContainer.classList.remove('dial-fail');
-            heatDemandEl.classList.remove('text-fail');
-        }
+        hrrScoreEl.textContent = '...';
         
         const response = await fetch(`${API_ENDPOINT}?postcode=${encodeURIComponent(postcode)}`);
         const result = await response.json();
+        if (!response.ok) throw new Error(result.error);
 
-        if (!response.ok) throw new Error(result.error || 'Failed to fetch property telemetry.');
+        const { epc, physics_baseline, weather } = result.data;
+        activePhysics = physics_baseline;
+        activePhysics.floorArea = epc.total_floor_area || 85;
 
-        const { data } = result;
-        currentRating = data.scores.current_hrr_score.toUpperCase();
-        currentBaselineDemand = data.scores.space_heating_demand;
+        // UI Reset
+        document.querySelectorAll('.switch input').forEach(el => el.checked = false);
+        epcMetaEl.textContent = `${epc.property_type} | ${epc.wall_description}`;
 
-        // 1. Target Band Logic (A, B, C = Pass | D, E, F, G = Fail)
-        const isRatingFailing = ['D', 'E', 'F', 'G'].includes(currentRating);
-        
-        // 2. Heat Demand Logic (<= 120 = Pass | > 120 = Fail)
-        const isDemandFailing = currentBaselineDemand > 120;
-
-        // Populate DOM
-        if (hrrScoreEl) hrrScoreEl.textContent = currentRating;
-        if (heatDemandEl) heatDemandEl.textContent = `${currentBaselineDemand} kWh/m²/yr`;
-        if (wallDescEl && data.epc_data) wallDescEl.textContent = data.epc_data.wall_description;
-        if (floorAreaEl && data.epc_data) floorAreaEl.textContent = `${data.epc_data.total_floor_area} m²`;
-
-        // Apply Red Fail States
-        if (isRatingFailing) {
-            hrrScoreEl.classList.add('text-fail');
-            dialContainer.classList.add('dial-fail');
+        // Feature Flagging (Pre-1919 Stone check)
+        const isPre1919 = epc.wall_description.toLowerCase().includes('sandstone') || epc.wall_description.toLowerCase().includes('solid');
+        if (isPre1919) {
+            iwiWarning.classList.remove('hidden');
+        } else {
+            iwiWarning.classList.add('hidden');
         }
-        if (isDemandFailing) {
-            heatDemandEl.classList.add('text-fail');
-        }
+
+        // Triage Data Injection
+        document.getElementById('designTemp').textContent = weather.winter_design_temp || "-4.2°C";
+        document.getElementById('rainExposure').textContent = weather.rain_exposure || "Severe";
+        document.getElementById('gridHeadroom').textContent = "88%"; // Placeholder until SPEN integration
+
+        updateUI(physics_baseline.baselineDemand);
 
     } catch (error) {
-        console.error('Fetch error:', error);
-        if (hrrScoreEl) hrrScoreEl.textContent = 'ERR';
+        console.error('API Error:', error);
+        hrrScoreEl.textContent = 'ERR';
     }
 }
 
-// Auto-Search (Follows typing with 600ms debounce)
 postcodeInput.addEventListener('input', (e) => {
     clearTimeout(debounceTimer);
-    const val = e.target.value.trim();
-    if (val.length >= 5) { // Standard UK postcode minimum length
-        debounceTimer = setTimeout(() => {
-            fetchPropertyData(val);
-        }, 600);
+    if (e.target.value.trim().length >= 5) {
+        debounceTimer = setTimeout(() => fetchPropertyData(e.target.value.trim()), 600);
     }
 });
 
-// Manual Button Click Backup
-calculateBtn.addEventListener('click', () => {
-    clearTimeout(debounceTimer);
-    fetchPropertyData(postcodeInput.value.trim());
-});
-
-// Client-Side Differential Sandbox (Updates logic locally)
-document.getElementById('toggleLoft').addEventListener('change', (e) => {
-    if (e.target.checked) {
-        let updatedDemand = Math.max(40, currentBaselineDemand - 25);
-        heatDemandEl.textContent = `${updatedDemand} kWh/m²/yr`;
-        
-        if (updatedDemand <= 120) heatDemandEl.classList.remove('text-fail');
-        if (currentRating === 'D' || currentRating === 'E') {
-            hrrScoreEl.textContent = 'C';
-            hrrScoreEl.classList.remove('text-fail');
-            dialContainer.classList.remove('dial-fail');
-        }
-    } else {
-        // Revert to baseline
-        fetchPropertyData(postcodeInput.value.trim()); 
-    }
+document.querySelectorAll('.switch input').forEach(toggle => {
+    toggle.addEventListener('change', recalculateSandbox);
 });
