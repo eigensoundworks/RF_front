@@ -239,83 +239,84 @@ async function fetchLiveGridHeadroom(lat, lon) {
       headers.Authorization = scheme + ' ' + process.env.DNO_API_KEY;
     }
 
-    /**
-     * Read the public SPD capacity heatmap when no custom DNO normalizer is configured.
-     * The dataset schema can change, so only fields explicitly expressed as percentages are
-     * accepted; raw MW/MVA capacity is not silently presented as a percentage.
-     */
-    async function fetchSpenHeatmapHeadroom(lat, lon) {
-      const endpoint = process.env.SPEN_HEATMAP_API_URL || DEFAULT_SPEN_HEATMAP_URL;
-      const point = `geom'POINT(${lon} ${lat})'`;
-      const params = new URLSearchParams({
-        where: `within_distance(geo_point,${point},25000)`,
-        limit: '100'
-      });
-
-      try {
-        const res = await fetch(`${endpoint}?${params.toString()}`, {
-          headers: { Accept: 'application/json' }
-        });
-        if (!res.ok) return null;
-        const payload = await res.json();
-        const records = Array.isArray(payload?.records)
-          ? payload.records.map((item) => item?.record || item).filter(Boolean)
-          : [];
-
-        const percentageKeys = [
-          'headroom_pct', 'headroom_percent', 'headroom_percentage',
-          'demand_headroom_pct', 'demand_headroom_percent',
-          'available_capacity_pct', 'available_capacity_percent'
-        ];
-        const getNumber = (record) => {
-          for (const key of percentageKeys) {
-            const value = Number(record[key]);
-            if (Number.isFinite(value) && value >= 0 && value <= 100) return value;
-          }
-          return null;
-        };
-        const getPoint = (record) => {
-          const pointValue = record.geo_point || record.coordinates || record.location;
-          if (Array.isArray(pointValue) && pointValue.length >= 2) {
-            return { lat: Number(pointValue[1]), lon: Number(pointValue[0]) };
-          }
-          if (pointValue && Number.isFinite(Number(pointValue.lat)) && Number.isFinite(Number(pointValue.lon))) {
-            return { lat: Number(pointValue.lat), lon: Number(pointValue.lon) };
-          }
-          if (pointValue && Number.isFinite(Number(pointValue.latitude)) && Number.isFinite(Number(pointValue.longitude))) {
-            return { lat: Number(pointValue.latitude), lon: Number(pointValue.longitude) };
-          }
-          return null;
-        };
-        const distance = (a, b) => {
-          const radians = (value) => value * Math.PI / 180;
-          const dLat = radians(a.lat - b.lat);
-          const dLon = radians(a.lon - b.lon);
-          const h = Math.sin(dLat / 2) ** 2
-            + Math.cos(radians(a.lat)) * Math.cos(radians(b.lat)) * Math.sin(dLon / 2) ** 2;
-          return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
-        };
-
-        const candidates = records
-          .map((record) => ({ record, headroomPct: getNumber(record), point: getPoint(record) }))
-          .filter((item) => item.headroomPct !== null);
-        if (!candidates.length) return null;
-        candidates.sort((a, b) => (a.point ? distance(a.point, { lat, lon }) : Infinity)
-          - (b.point ? distance(b.point, { lat, lon }) : Infinity));
-        return {
-          headroomPct: candidates[0].headroomPct,
-          source: 'SP Energy Networks SPD capacity heatmap'
-        };
-      } catch (_) {
-        return null;
-      }
-    }
     const res = await fetch(url, { headers });
     if (!res.ok) return null;
     const data = await res.json();
     const headroom = Number(data?.headroom_pct);
     if (!Number.isFinite(headroom)) return null;
     return { headroomPct: headroom, source: data?.source || 'DNO Open Data' };
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Read the public SPD capacity heatmap when no custom DNO normalizer is configured.
+ * The dataset schema can change, so only fields explicitly expressed as percentages are
+ * accepted; raw MW/MVA capacity is not silently presented as a percentage.
+ */
+async function fetchSpenHeatmapHeadroom(lat, lon) {
+  const endpoint = process.env.SPEN_HEATMAP_API_URL || DEFAULT_SPEN_HEATMAP_URL;
+  const point = `geom'POINT(${lon} ${lat})'`;
+  const params = new URLSearchParams({
+    where: `within_distance(geo_point,${point},25000)`,
+    limit: '100'
+  });
+
+  try {
+    const res = await fetch(`${endpoint}?${params.toString()}`, {
+      headers: { Accept: 'application/json' }
+    });
+    if (!res.ok) return null;
+    const payload = await res.json();
+    const records = Array.isArray(payload?.records)
+      ? payload.records.map((item) => item?.record || item).filter(Boolean)
+      : [];
+
+    const percentageKeys = [
+      'headroom_pct', 'headroom_percent', 'headroom_percentage',
+      'demand_headroom_pct', 'demand_headroom_percent',
+      'available_capacity_pct', 'available_capacity_percent'
+    ];
+    const getNumber = (record) => {
+      for (const key of percentageKeys) {
+        const value = Number(record[key]);
+        if (Number.isFinite(value) && value >= 0 && value <= 100) return value;
+      }
+      return null;
+    };
+    const getPoint = (record) => {
+      const pointValue = record.geo_point || record.coordinates || record.location;
+      if (Array.isArray(pointValue) && pointValue.length >= 2) {
+        return { lat: Number(pointValue[1]), lon: Number(pointValue[0]) };
+      }
+      if (pointValue && Number.isFinite(Number(pointValue.lat)) && Number.isFinite(Number(pointValue.lon))) {
+        return { lat: Number(pointValue.lat), lon: Number(pointValue.lon) };
+      }
+      if (pointValue && Number.isFinite(Number(pointValue.latitude)) && Number.isFinite(Number(pointValue.longitude))) {
+        return { lat: Number(pointValue.latitude), lon: Number(pointValue.longitude) };
+      }
+      return null;
+    };
+    const distance = (a, b) => {
+      const radians = (value) => value * Math.PI / 180;
+      const dLat = radians(a.lat - b.lat);
+      const dLon = radians(a.lon - b.lon);
+      const h = Math.sin(dLat / 2) ** 2
+        + Math.cos(radians(a.lat)) * Math.cos(radians(b.lat)) * Math.sin(dLon / 2) ** 2;
+      return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+    };
+
+    const candidates = records
+      .map((record) => ({ record, headroomPct: getNumber(record), point: getPoint(record) }))
+      .filter((item) => item.headroomPct !== null);
+    if (!candidates.length) return null;
+    candidates.sort((a, b) => (a.point ? distance(a.point, { lat, lon }) : Infinity)
+      - (b.point ? distance(b.point, { lat, lon }) : Infinity));
+    return {
+      headroomPct: candidates[0].headroomPct,
+      source: 'SP Energy Networks SPD capacity heatmap'
+    };
   } catch (_) {
     return null;
   }
@@ -508,9 +509,9 @@ module.exports = async (req, res) => {
 
     const physics = derivePhysics(epcSourceRecord, coords);
 
-    // Grid headroom: prefer a real DNO open-data lookup when DNO_API_URL is configured;
-    // otherwise fall back to the deterministic coordinate-hash proxy (clearly flagged as
-    // estimated, since it is not derived from any real network dataset).
+    // Grid headroom: prefer a configured DNO normalizer, then the public SPEN heatmap;
+    // otherwise use the deterministic coordinate-hash proxy (clearly flagged as estimated,
+    // since it is not derived from any real network dataset).
     const liveGrid = await fetchLiveGridHeadroom(coords.lat, coords.lon)
       || await fetchSpenHeatmapHeadroom(coords.lat, coords.lon);
     const GRID_HEADROOM_BASE = 75;
