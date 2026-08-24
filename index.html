@@ -2,144 +2,106 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HEETSA Remote Triage Engine</title>
-    
-    <!-- Typography Stack: Sora, Google Sans, Noto -->
+    <!-- Agreed Typography: Manrope & Nunito Sans -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Noto+Sans:wght@400;600;700&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="app-container">
         
-        <!-- Top Search Bar Header -->
         <header class="top-search-bar glass-panel">
             <div class="search-input-wrapper">
-                <input type="text" id="postcodeInput" placeholder="Property Address or Postcode (e.g., PA16 8LG)" value="PA16 8LG">
+                <input type="text" id="postcodeInput" placeholder="Enter Scottish Postcode (e.g., PA16 8LG)">
             </div>
             <button id="calculateBtn" class="neumorphic-btn-primary">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                Calculate HEEM Score
+                Calculate HEETSA Score
             </button>
         </header>
 
-        <!-- Main Dashboard Grid -->
         <div class="dashboard-grid">
             
-            <!-- Left Panel: Existing Work Done -->
-            <section class="glass-panel">
-                <h2 class="panel-title">EXISTING WORK DONE</h2>
-                <span class="card-subtitle">(via latest HEM/EPC)</span>
-                
-                <div class="work-item">
-                    <span class="dot"></span>
-                    <span class="work-name" id="wallDesc">Wall Insulation (Loading...)</span>
-                    <span class="work-score" id="floorAreaVal">--</span>
-                </div>
-                <div class="work-item">
-                    <span class="dot"></span>
-                    <span class="work-name">Efficient Boiler</span>
-                    <span class="work-score">Pass</span>
-                </div>
-                <div class="work-item">
-                    <span class="dot"></span>
-                    <span class="work-name">Double Glazing</span>
-                    <span class="work-score">Standard</span>
-                </div>
-            </section>
-
-            <!-- Center Panel: The HEETSA Dials -->
+            <!-- Core Dial (Driven purely by Fabric) -->
             <section class="score-panel glass-panel">
                 <h2 class="panel-title">HEETSA HRR Report</h2>
-                <div class="dial-container neumorphic-dial">
+                <div id="dialContainer" class="neumorphic-dial">
                     <span id="hrrScore" class="score-main">--</span>
                     <span class="score-label">Target: Band C</span>
                 </div>
                 <div class="demand-sub" id="heatDemand">-- kWh/m²/yr</div>
+                <div class="epc-meta" id="epcMeta">Awaiting Input...</div>
             </section>
 
-            <!-- Right Panel: Recommended + Required Work (Sandbox) -->
-            <section class="glass-panel">
+            <!-- Differential Sandbox (Strictly Grouped) -->
+            <section class="glass-panel sandbox-panel">
                 <h2 class="panel-title">RETROFIT SANDBOX</h2>
-                <span class="card-subtitle">(Differential Physics Engine)</span>
+                <span class="card-subtitle">Group A: Fabric Upgrades (Impacts HRR)</span>
                 
                 <div class="action-row">
                     <div class="action-info">
                         <span class="action-title">Improve Loft Insulation</span>
-                        <span class="action-tag green">Thermal Barrier</span>
+                        <span class="action-tag green">Sets U-Value to 0.11</span>
                     </div>
-                    <label class="switch">
-                        <input type="checkbox" id="toggleLoft">
-                        <span class="slider"></span>
-                    </label>
-                    <span class="score-gain">-15 kWh</span>
+                    <label class="switch"><input type="checkbox" id="toggleLoft"><span class="slider"></span></label>
                 </div>
 
                 <div class="action-row">
                     <div class="action-info">
-                        <span class="action-title">Air Source Heat Pump</span>
-                        <span class="action-tag green">Clean Heat</span>
+                        <span class="action-title">Internal Wall Insulation (IWI)</span>
+                        <span class="action-tag warning hidden" id="iwiWarning">⚠ High moisture risk. WUFI required.</span>
                     </div>
-                    <label class="switch">
-                        <input type="checkbox" id="toggleHeatPump">
+                    <label class="switch"><input type="checkbox" id="toggleIWI"><span class="slider"></span></label>
+                </div>
+
+                <div class="action-row">
+                    <div class="action-info">
+                        <span class="action-title">External Wall Insulation (EWI)</span>
+                        <span class="action-tag locked hidden" id="ewiWarning">🔒 Listed/Conservation Area</span>
+                    </div>
+                    <label class="switch"><input type="checkbox" id="toggleEWI"><span class="slider"></span></label>
+                </div>
+
+                <div class="divider-horizontal"></div>
+                <span class="card-subtitle">Group B: Clean Heating (Zero HRR Impact)</span>
+
+                <div class="action-row">
+                    <div class="action-info">
+                        <span class="action-title">Air Source Heat Pump</span>
+                        <span class="action-tag locked" id="ashpGatekeeper">🔒 Requires Demand ≤ 70 kWh/m²</span>
+                    </div>
+                    <label class="switch disabled-switch">
+                        <input type="checkbox" id="toggleASHP" disabled>
                         <span class="slider"></span>
                     </label>
-                    <span class="score-gain">Pass</span>
                 </div>
             </section>
 
         </div>
 
-        <!-- Bottom Panel: Local Climate Assessment -->
+        <!-- Bottom Panel: Actionable Climate & Grid Data -->
         <section class="glass-panel climate-section">
-            <h2 class="panel-title">LOCAL CLIMATE ASSESSMENT <span class="sub-muted">(from EPW & Open-Meteo)</span></h2>
-            
-            <div class="charts-container">
-                <div class="chart-group">
-                    <h4>WINTER ASSESSMENT <span class="sub-muted">(Heating Demand)</span></h4>
-                    <div class="bars-flex">
-                        <div class="bar-col"><div class="bar" style="height: 70px;"></div><span>Dec</span><small>220kWh</small></div>
-                        <div class="bar-col"><div class="bar" style="height: 85px;"></div><span>Jan</span><small>250kWh</small></div>
-                        <div class="bar-col"><div class="bar" style="height: 60px;"></div><span>Feb</span><small>200kWh</small></div>
-                        <div class="bar-col"><div class="bar" style="height: 30px;"></div><span>Mar</span><small>100kWh</small></div>
-                    </div>
+            <h2 class="panel-title">LOCAL CLIMATE & GRID CONSTRAINTS</h2>
+            <div class="triage-data-grid">
+                <div class="triage-card">
+                    <span class="triage-label">Winter Design Temp</span>
+                    <span class="triage-value" id="designTemp">--</span>
+                    <span class="triage-source">Open-Meteo</span>
                 </div>
-
-                <div class="divider-vertical"></div>
-
-                <div class="chart-group">
-                    <h4>SUMMER ASSESSMENT <span class="sub-muted">(Cooling & Gain)</span></h4>
-                    <div class="summer-split">
-                        <div class="sub-chart">
-                            <span class="mini-label">Cooling Demand</span>
-                            <div class="bars-flex">
-                                <div class="bar-col"><div class="bar small" style="height: 20px;"></div><span>Jun</span><small>50kWh</small></div>
-                                <div class="bar-col"><div class="bar small" style="height: 25px;"></div><span>Jul</span><small>60kWh</small></div>
-                            </div>
-                        </div>
-                        <div class="sub-chart">
-                            <span class="mini-label">Solar Heat Gain</span>
-                            <div class="bars-flex">
-                                <div class="bar-col"><div class="bar small" style="height: 60px;"></div><span>Jun</span><small>150kWh</small></div>
-                                <div class="bar-col"><div class="bar small" style="height: 20px;"></div><span>Jul</span><small>50kWh</small></div>
-                            </div>
-                        </div>
-                    </div>
+                <div class="triage-card">
+                    <span class="triage-label">Wind-Driven Rain</span>
+                    <span class="triage-value" id="rainExposure">--</span>
+                    <span class="triage-source">Exposure Index</span>
+                </div>
+                <div class="triage-card">
+                    <span class="triage-label">Local Grid Headroom</span>
+                    <span class="triage-value" id="gridHeadroom">--</span>
+                    <span class="triage-source">SPEN Transformer</span>
                 </div>
             </div>
         </section>
-
-        <!-- Bottom Navigation Bar -->
-        <nav class="neumorphic-nav glass-panel">
-            <a href="#" class="nav-item active">Dashboard</a>
-            <a href="#" class="nav-item">Reports</a>
-            <a href="#" class="nav-item">Improvements</a>
-            <a href="#" class="nav-item">Profile</a>
-        </nav>
-
     </div>
     <script src="app.js"></script>
 </body>
