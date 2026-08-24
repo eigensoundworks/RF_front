@@ -101,39 +101,33 @@
             </div>
         </section>
 
-        <!-- Seasonal Performance Charts -->
+        <!-- Winter vs Summer Seasonal Comparison (No Months) -->
         <section class="glass-panel climate-section">
-            <h2 class="panel-title">PROPERTY SEASONAL PERFORMANCE <span class="card-subtitle" style="display:inline; text-transform:none;">(Live Differential Output)</span></h2>
-            <div class="charts-container">
-                <div class="chart-group">
-                    <h4>WINTER <span class="sub-muted">(Heating Demand)</span></h4>
-                    <div class="bars-flex">
-                        <div class="bar-col"><div class="bar" id="barDec" style="height: 0px;"></div><span>Dec</span><small id="valDec">--</small></div>
-                        <div class="bar-col"><div class="bar" id="barJan" style="height: 0px;"></div><span>Jan</span><small id="valJan">--</small></div>
-                        <div class="bar-col"><div class="bar" id="barFeb" style="height: 0px;"></div><span>Feb</span><small id="valFeb">--</small></div>
-                        <div class="bar-col"><div class="bar" id="barMar" style="height: 0px;"></div><span>Mar</span><small id="valMar">--</small></div>
+            <h2 class="panel-title">SEASONAL PERFORMANCE <span class="card-subtitle" style="display:inline; text-transform:none;">(Winter Heating vs. Summer Overheating Risk)</span></h2>
+            <div class="seasonal-grid">
+                
+                <div class="seasonal-card">
+                    <span class="seasonal-title">WINTER HEATING DEMAND</span>
+                    <div class="seasonal-value-box">
+                        <span id="valWinter" class="seasonal-number">--</span>
+                        <span class="seasonal-unit">kWh/yr</span>
+                    </div>
+                    <div class="progress-bar-bg">
+                        <div id="barWinter" class="progress-bar-fill winter-fill"></div>
                     </div>
                 </div>
-                <div class="divider-vertical"></div>
-                <div class="chart-group">
-                    <h4>SUMMER <span class="sub-muted">(Cooling & Overheating Risk)</span></h4>
-                    <div class="summer-split">
-                        <div class="sub-chart">
-                            <span class="mini-label">Cooling Demand</span>
-                            <div class="bars-flex">
-                                <div class="bar-col"><div class="bar small" id="barJunCool" style="height: 0px;"></div><span>Jun</span><small id="valJunCool">--</small></div>
-                                <div class="bar-col"><div class="bar small" id="barJulCool" style="height: 0px;"></div><span>Jul</span><small id="valJulCool">--</small></div>
-                            </div>
-                        </div>
-                        <div class="sub-chart">
-                            <span class="mini-label">Solar Heat Gain</span>
-                            <div class="bars-flex">
-                                <div class="bar-col"><div class="bar small" id="barJunGain" style="height: 0px;"></div><span>Jun</span><small id="valJunGain">--</small></div>
-                                <div class="bar-col"><div class="bar small" id="barJulGain" style="height: 0px;"></div><span>Jul</span><small id="valJulGain">--</small></div>
-                            </div>
-                        </div>
+
+                <div class="seasonal-card">
+                    <span class="seasonal-title">SUMMER OVERHEATING RISK</span>
+                    <div class="seasonal-value-box">
+                        <span id="valSummer" class="seasonal-number">--</span>
+                        <span class="seasonal-unit">kWh/yr</span>
+                    </div>
+                    <div class="progress-bar-bg">
+                        <div id="barSummer" class="progress-bar-fill summer-fill"></div>
                     </div>
                 </div>
+
             </div>
         </section>
         
