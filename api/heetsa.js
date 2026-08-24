@@ -21,6 +21,10 @@ function isScottishPostcode(postcode) {
   return SCOTTISH_POSTCODE_PREFIX.test(normalizeText(postcode || ''));
 }
 
+function getOsPlacesApiKey() {
+  return process.env.OS_PLACES_API_KEY || process.env.os_places_api_key || '';
+}
+
 async function getEpcData() {
   if (cachedEpcData) return cachedEpcData;
   if (cachedEpcDataPromise) return await cachedEpcDataPromise;
@@ -132,7 +136,7 @@ function searchEpcAddresses(searchIndex, query) {
 }
 
 async function searchWithOsPlaces(query) {
-  const apiKey = process.env.OS_PLACES_API_KEY;
+  const apiKey = getOsPlacesApiKey();
   if (!apiKey || !query) return [];
 
   try {
@@ -218,7 +222,7 @@ function resolveRecord(indexes, { uprn, address }) {
  * scenes. Never required — callers should fall back to the EPC blob fuzzy match otherwise.
  */
 async function resolveWithOsPlaces(query) {
-  const apiKey = process.env.OS_PLACES_API_KEY;
+  const apiKey = getOsPlacesApiKey();
   if (!apiKey || !query) return null;
 
   try {
