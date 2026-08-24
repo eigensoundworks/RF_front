@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>HEETSA Remote Triage Engine</title>
+    
+    <!-- Google Fonts: Manrope & Nunito Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Top Search Bar -->
+        <header class="search-section glass-panel">
+            <input type="text" id="postcodeInput" placeholder="Enter Scottish Postcode (e.g., PA15 1XX)" class="neumorphic-input">
+            <button id="calculateBtn" class="primary-btn">Calculate HEETSA Score</button>
+        </header>
+
+        <!-- Main Dashboard Grid -->
+        <main class="dashboard-grid">
+            
+            <!-- Left Panel: Current Baseline -->
+            <section class="baseline-panel glass-panel">
+                <h2 class="panel-title">Property Baseline</h2>
+                <div id="propertyData" class="data-readout">
+                    <!-- API Data Injects Here -->
+                    <p>Awaiting Search...</p>
+                </div>
+            </section>
+
+            <!-- Center Panel: The HEETSA Dials -->
+            <section class="score-panel glass-panel">
+                <h2 class="panel-title">HEETSA HRR Report</h2>
+                <div class="dial-container neumorphic-dial">
+                    <span id="hrrScore" class="score-main">--</span>
+                    <span class="score-label">Target: Band C</span>
+                </div>
+                <div class="metrics-row">
+                    <div class="metric">
+                        <span class="metric-value" id="heatDemand">--</span>
+                        <span class="metric-label">kWh/m²/yr</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Panel: Interactive Sandbox -->
+            <section class="sandbox-panel glass-panel">
+                <h2 class="panel-title">Retrofit Sandbox</h2>
+                
+                <h3 class="sandbox-group">Fabric Upgrades (Impacts HRR)</h3>
+                <!-- Example Toggle -->
+                <div class="toggle-row">
+                    <label for="toggleLoft">Improve Loft Insulation</label>
+                    <input type="checkbox" id="toggleLoft" class="toggle-switch">
+                </div>
+                
+                <h3 class="sandbox-group">Clean Heat (Requires HRR Pass)</h3>
+                <div class="toggle-row">
+                    <label for="toggleHeatPump">Air Source Heat Pump</label>
+                    <input type="checkbox" id="toggleHeatPump" class="toggle-switch" disabled>
+                </div>
+            </section>
+
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
