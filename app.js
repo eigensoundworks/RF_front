@@ -1,4 +1,4 @@
-const API_ENDPOINT = '/api/heetsa';
+const API_ENDPOINT = 'https://rf-front-three.vercel.app/api/heetsa';
 
 const postcodeInput = document.getElementById('postcodeInput');
 const addressDropdown = document.getElementById('addressDropdown');
