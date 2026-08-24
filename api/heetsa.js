@@ -1,6 +1,8 @@
 const DEFAULT_BLOB_URL = 'https://dmceeam452nturjk.public.blob.vercel-storage.com/epc_lookup.json';
 const DEFAULT_SPEN_HEATMAP_URL = 'https://spenergynetworks.opendatasoft.com/api/explore/v2.1/catalog/datasets/distribution-capacity-heatmaps-spd/records';
 
+const SCOTTISH_POSTCODE_PREFIX = /^(AB|DD|DG|EH|FK|G|HS|IV|KA|KW|KY|ML|PA|PH|TD|ZE)\b/i;
+
 let cachedEpcData = null;
 let cachedEpcDataPromise = null;
 let cachedIndexes = null;
@@ -13,6 +15,10 @@ function extractPostcode(value) {
   const postcodeRegex = /[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}/i;
   const match = (value || '').match(postcodeRegex);
   return match ? normalizeText(match[0]) : '';
+}
+
+function isScottishPostcode(postcode) {
+  return SCOTTISH_POSTCODE_PREFIX.test(normalizeText(postcode || ''));
 }
 
 async function getEpcData() {
@@ -125,6 +131,50 @@ function searchEpcAddresses(searchIndex, query) {
   return deduped;
 }
 
+async function searchWithOsPlaces(query) {
+  const apiKey = process.env.OS_PLACES_API_KEY;
+  if (!apiKey || !query) return [];
+
+  try {
+    const params = new URLSearchParams({
+      query: String(query),
+      maxresults: '20',
+      dataset: 'DPA',
+      lr: 'EN',
+      key: apiKey
+    });
+    const url = `https://api.os.uk/search/places/v1/find?${params.toString()}`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    const out = [];
+    const seen = new Set();
+
+    for (const result of (data?.results || [])) {
+      const dpa = result?.DPA;
+      if (!dpa) continue;
+
+      const address = (dpa.ADDRESS || '').toString().trim();
+      const postcode = normalizeText(dpa.POSTCODE || '');
+      const uprn = (dpa.UPRN || '').toString().trim();
+
+      if (!address || !postcode || !isScottishPostcode(postcode)) continue;
+
+      const key = `${uprn}|${address}|${postcode}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      out.push({ address, postcode, uprn, score: 1000 - out.length });
+      if (out.length >= 20) break;
+    }
+
+    return out;
+  } catch (_) {
+    return [];
+  }
+}
+
 // Minimum confidence score (see scoreSuggestion) below which a fuzzy match is rejected
 // rather than silently presented as a resolved property.
 const FUZZY_MATCH_MIN_SCORE = 70;
@@ -172,12 +222,24 @@ async function resolveWithOsPlaces(query) {
   if (!apiKey || !query) return null;
 
   try {
-    const url = `https://api.os.uk/search/places/v1/find?query=${encodeURIComponent(query)}&maxresults=1&key=${apiKey}`;
+    const params = new URLSearchParams({
+      query: String(query),
+      maxresults: '10',
+      dataset: 'DPA',
+      lr: 'EN',
+      key: apiKey
+    });
+    const url = `https://api.os.uk/search/places/v1/find?${params.toString()}`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
-    const dpa = data?.results?.[0]?.DPA;
+
+    const dpa = (data?.results || [])
+      .map((r) => r?.DPA)
+      .find((d) => d && isScottishPostcode(d.POSTCODE));
+
     if (!dpa) return null;
+
     return {
       uprn: (dpa.UPRN || '').toString(),
       address: dpa.ADDRESS || '',
@@ -462,6 +524,10 @@ function getApplicableStandard(referenceDate = new Date()) {
 }
 
 module.exports = async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   try {
@@ -470,8 +536,14 @@ module.exports = async (req, res) => {
     const { search, address, uprn } = req.query;
 
     if (search) {
-      const matches = searchEpcAddresses(indexes.searchIndex, search);
-      return res.status(200).json({ success: true, addresses: matches });
+      const osMatches = await searchWithOsPlaces(search);
+      if (osMatches.length > 0) {
+        return res.status(200).json({ success: true, addresses: osMatches });
+      }
+
+      const blobMatches = searchEpcAddresses(indexes.searchIndex, search)
+        .filter((m) => isScottishPostcode(m.postcode));
+      return res.status(200).json({ success: true, addresses: blobMatches });
     }
 
     // Bridging layer: try an exact/fuzzy match against the EPC blob first (uprn is an
@@ -496,6 +568,14 @@ module.exports = async (req, res) => {
     const matchedRecord = resolved.entry.record;
     const matchedAddress = resolved.entry.address;
     const matchedPostcode = resolved.entry.postcode || extractPostcode(matchedAddress);
+
+    if (!isScottishPostcode(matchedPostcode)) {
+      return res.status(404).json({
+        success: false,
+        error: 'Matched address is outside Scotland.'
+      });
+    }
+
     const coords = await resolveCoordinates(matchedPostcode);
 
     // Optional live EPC overlay: if configured, prefer live gov.uk EPC Register data over the
