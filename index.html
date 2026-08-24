@@ -8,7 +8,41 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <style>
+   /:root {
+    --font-heading: 'Manrope', sans-serif;
+    --font-body: 'Nunito Sans', sans-serif;
+    --fail-red: #ef4444;
+    --warn-orange: #f59e0b;
+}
+
+/* Base Font Override */
+body { font-family: var(--font-body); }
+.panel-title, .score-main, .triage-value, .neumorphic-btn-primary { font-family: var(--font-heading); }
+
+/* Sandbox UI Logic */
+.hidden { display: none !important; }
+.action-tag.warning { color: var(--warn-orange); font-weight: 700; font-size: 0.7rem; display: block; margin-top: 2px;}
+.action-tag.locked { color: var(--fail-red); font-weight: 700; font-size: 0.7rem; display: block; margin-top: 2px;}
+
+.disabled-switch { opacity: 0.4; cursor: not-allowed; }
+.disabled-switch .slider { cursor: not-allowed; }
+
+/* Red Fail States */
+.neumorphic-dial.dial-fail { border-color: var(--fail-red); }
+.score-main.text-fail { color: var(--fail-red); }
+.demand-sub.text-fail { color: var(--fail-red); }
+
+/* Horizontal Divider */
+.divider-horizontal { height: 1px; background: rgba(184, 199, 224, 0.6); margin: 1.5rem 0 1rem 0; }
+
+/* Triage Data Grid */
+.triage-data-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1rem; }
+.triage-card { background: var(--bg-color); padding: 1rem; border-radius: 12px; box-shadow: inset 4px 4px 8px var(--neu-inset-dark), inset -4px -4px 8px var(--shadow-light); display: flex; flex-direction: column; align-items: center; text-align: center; }
+.triage-label { font-size: 0.75rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.5rem; }
+.triage-value { font-size: 1.5rem; font-weight: 800; color: var(--accent-green); line-height: 1; }
+.triage-source { font-size: 0.6rem; color: var(--text-muted); margin-top: 0.5rem; }/
+</style>
 </head>
 <body>
     <div class="app-container">
