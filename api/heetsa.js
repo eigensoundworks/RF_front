@@ -124,6 +124,10 @@ function searchEpcAddresses(searchIndex, query) {
   return deduped;
 }
 
+// Minimum confidence score (see scoreSuggestion) below which a fuzzy match is rejected
+// rather than silently presented as a resolved property.
+const FUZZY_MATCH_MIN_SCORE = 70;
+
 function resolveRecord(indexes, { uprn, address }) {
   const normalizedUprn = (uprn || '').toString().trim();
   if (normalizedUprn && indexes.byUprn.has(normalizedUprn)) {
@@ -135,7 +139,113 @@ function resolveRecord(indexes, { uprn, address }) {
     return { matchQuality: 'exact_address', entry: indexes.byAddress.get(normalizedAddress) };
   }
 
+  // Graduated fallback: nobody should need to know or type a UPRN. If we can't get an
+  // exact hit, take the best fuzzy candidate (already used for the live-search dropdown)
+  // and clearly flag it as approximate so the UI can warn the user.
+  if (normalizedAddress) {
+    let best = null;
+    let bestScore = 0;
+    for (const entry of indexes.searchIndex) {
+      const score = scoreSuggestion(entry, normalizedAddress);
+      if (score > bestScore) {
+        bestScore = score;
+        best = entry;
+      }
+    }
+    if (best && bestScore >= FUZZY_MATCH_MIN_SCORE) {
+      return { matchQuality: 'fuzzy_address', matchScore: bestScore, entry: best };
+    }
+  }
+
   return null;
+}
+
+/**
+ * Optional bridging step: resolve a free-text address to a canonical address + UPRN using
+ * the OS Places "Find" API, when OS_PLACES_API_KEY is configured. This lets a homeowner type
+ * an imprecise address while the UPRN join-key is still resolved automatically behind the
+ * scenes. Never required — callers should fall back to the EPC blob fuzzy match otherwise.
+ */
+async function resolveWithOsPlaces(query) {
+  const apiKey = process.env.OS_PLACES_API_KEY;
+  if (!apiKey || !query) return null;
+
+  try {
+    const url = `https://api.os.uk/search/places/v1/find?query=${encodeURIComponent(query)}&maxresults=1&key=${apiKey}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const dpa = data?.results?.[0]?.DPA;
+    if (!dpa) return null;
+    return {
+      uprn: (dpa.UPRN || '').toString(),
+      address: dpa.ADDRESS || '',
+      postcode: normalizeText(dpa.POSTCODE || '')
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Optional live overlay: fetch the current EPC record for a UPRN from the official gov.uk
+ * EPC Open Data / EPC Register API, when EPC_REGISTER_API_KEY + EPC_REGISTER_EMAIL are
+ * configured. Falls back to null (caller keeps using the static blob) if unavailable.
+ */
+async function fetchLiveEpcRecord(uprn) {
+  const apiKey = process.env.EPC_REGISTER_API_KEY;
+  const email = process.env.EPC_REGISTER_EMAIL;
+  if (!apiKey || !email || !uprn) return null;
+
+  try {
+    const auth = Buffer.from(`${email}:${apiKey}`).toString('base64');
+    const url = `https://epc.opendatacommunities.org/api/v1/domestic/search?uprn=${encodeURIComponent(uprn)}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' }
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const row = data?.rows?.[0];
+    if (!row) return null;
+    return {
+      currentEnergyRating: (row['current-energy-rating'] || '').toUpperCase() || null,
+      currentEnergyEfficiency: Number(row['current-energy-efficiency']) || null,
+      floorArea: Number(row['total-floor-area']) || null,
+      wallDescription: row['walls-description'] || null,
+      propertyType: row['property-type'] || null
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Optional live overlay: fetch real substation/network headroom from a DNO open data endpoint
+ * (e.g. SPEN, UKPN, NGED, SSEN open data portals), when DNO_API_URL is configured. The exact
+ * response shape varies by DNO, so this expects a proxy/normalizer endpoint that returns
+ * { headroom_pct } for given lat/lon — point DNO_API_URL at such a service. Falls back to the
+ * deterministic estimate when not configured or unavailable.
+ */
+async function fetchLiveGridHeadroom(lat, lon) {
+  const endpoint = process.env.DNO_API_URL;
+  if (!endpoint) return null;
+
+  try {
+    const url = `${endpoint}${endpoint.includes('?') ? '&' : '?'}lat=${lat}&lon=${lon}`;
+    const headers = { Accept: 'application/json' };
+    if (process.env.DNO_API_KEY) {
+      const scheme = 'Bearer';
+      headers.Authorization = scheme + ' ' + process.env.DNO_API_KEY;
+    }
+    const res = await fetch(url, { headers });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const headroom = Number(data?.headroom_pct);
+    if (!Number.isFinite(headroom)) return null;
+    return { headroomPct: headroom, source: data?.source || 'DNO Open Data' };
+  } catch (_) {
+    return null;
+  }
 }
 
 function derivePhysics(matchedRecord, coords) {
@@ -173,9 +283,29 @@ function derivePhysics(matchedRecord, coords) {
   };
 }
 
+// Annual rainfall bands (mm/yr) used to classify wind-driven rain exposure, combined with
+// the measured average wind speed. Thresholds approximate BS 8104 exposure zone guidance.
+const RAIN_EXPOSURE_BANDS = [
+  { maxMm: 700, category: 'Low' },
+  { maxMm: 1000, category: 'Moderate' },
+  { maxMm: 1400, category: 'High' },
+  { maxMm: Infinity, category: 'Severe' }
+];
+
+function classifyRainExposure(annualRainMm, windSpeedMs) {
+  let category = RAIN_EXPOSURE_BANDS.find((band) => annualRainMm <= band.maxMm).category;
+  // High wind speed pushes moderate rainfall sites up a band (driving rain, not just rainfall).
+  if (windSpeedMs >= 6 && category !== 'Severe') {
+    const idx = RAIN_EXPOSURE_BANDS.findIndex((band) => band.category === category);
+    category = RAIN_EXPOSURE_BANDS[Math.min(idx + 1, RAIN_EXPOSURE_BANDS.length - 1)].category;
+  }
+  return category;
+}
+
 async function resolveCoordinates(postcode) {
   let lat = 55.9469;
   let lon = -4.7565;
+  let geocodeVerified = false;
 
   if (postcode) {
     try {
@@ -185,6 +315,7 @@ async function resolveCoordinates(postcode) {
         if (geoData?.result?.latitude && geoData?.result?.longitude) {
           lat = geoData.result.latitude;
           lon = geoData.result.longitude;
+          geocodeVerified = true;
         }
       }
     } catch (_) {
@@ -193,29 +324,64 @@ async function resolveCoordinates(postcode) {
   }
 
   let windSpeedMs = 4.5;
+  let annualRainMm = 1200;
+  let windVerified = false;
+  let rainVerified = false;
   try {
     const weatherYear = new Date().getUTCFullYear() - 1;
     const startDate = `${weatherYear}-01-01`;
     const endDate = `${weatherYear}-12-31`;
-    const weatherRes = await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${startDate}&end_date=${endDate}&hourly=wind_speed_10m`);
+    const weatherRes = await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${startDate}&end_date=${endDate}&hourly=wind_speed_10m&daily=precipitation_sum&timezone=UTC`);
     if (weatherRes.ok) {
       const weatherData = await weatherRes.json();
       const speeds = weatherData?.hourly?.wind_speed_10m;
       if (Array.isArray(speeds) && speeds.length > 0) {
         const avg = speeds.reduce((a, b) => a + b, 0) / speeds.length;
         windSpeedMs = avg / 3.6;
+        windVerified = true;
+      }
+      const dailyRain = weatherData?.daily?.precipitation_sum;
+      if (Array.isArray(dailyRain) && dailyRain.length > 0) {
+        annualRainMm = dailyRain.reduce((a, b) => a + (Number(b) || 0), 0);
+        rainVerified = true;
       }
     }
   } catch (_) {
-    // Use fallback wind speed.
+    // Use fallback wind speed / rainfall.
   }
+  const weatherVerified = windVerified || rainVerified;
 
   return {
     lat,
     lon,
     windSpeedMs,
-    winterDesignTemp: lat > 56.0 ? -5.5 : -3.8
+    winterDesignTemp: lat > 56.0 ? -5.5 : -3.8,
+    annualRainMm: Math.round(annualRainMm),
+    rainExposure: classifyRainExposure(annualRainMm, windSpeedMs),
+    geocodeVerified,
+    weatherVerified,
+    rainVerified
   };
+}
+
+/**
+ * Upcoming minimum energy demand standards (illustrative HEETSA-style bands, e.g. Scotland's
+ * proposed Heat in Buildings / EESSH2-derived targets). Kept as a simple lookup so the UI can
+ * compare a property's calculated demand against the standard that applies at a given date,
+ * rather than a single fixed threshold. Update as official regulations are confirmed.
+ */
+const REQUIRED_STANDARDS = [
+  { appliesFrom: '2025-01-01', label: 'Current Minimum (Band D equivalent)', maxDemandKwh: 150 },
+  { appliesFrom: '2028-01-01', label: 'Proposed Interim Standard (Band C equivalent)', maxDemandKwh: 120 },
+  { appliesFrom: '2033-01-01', label: 'Proposed Final Standard (Band B equivalent)', maxDemandKwh: 80 }
+];
+
+function getApplicableStandard(referenceDate = new Date()) {
+  let applicable = REQUIRED_STANDARDS[0];
+  for (const standard of REQUIRED_STANDARDS) {
+    if (new Date(standard.appliesFrom) <= referenceDate) applicable = standard;
+  }
+  return applicable;
 }
 
 module.exports = async (req, res) => {
@@ -231,7 +397,18 @@ module.exports = async (req, res) => {
       return res.status(200).json({ success: true, addresses: matches });
     }
 
-    const resolved = resolveRecord(indexes, { uprn, address });
+    // Bridging layer: try an exact/fuzzy match against the EPC blob first (uprn is an
+    // internal join key only — the user is never required to supply one). If that fails and
+    // an OS Places key is configured, attempt to resolve a canonical address/UPRN from
+    // free text before giving up.
+    let resolved = resolveRecord(indexes, { uprn, address });
+    if (!resolved && !uprn && address) {
+      const osMatch = await resolveWithOsPlaces(address);
+      if (osMatch) {
+        resolved = resolveRecord(indexes, { uprn: osMatch.uprn, address: osMatch.address });
+      }
+    }
+
     if (!resolved) {
       return res.status(404).json({
         success: false,
@@ -243,14 +420,35 @@ module.exports = async (req, res) => {
     const matchedAddress = resolved.entry.address;
     const matchedPostcode = resolved.entry.postcode || extractPostcode(matchedAddress);
     const coords = await resolveCoordinates(matchedPostcode);
-    const physics = derivePhysics(matchedRecord, coords);
-    // Deterministic fallback proxy for local grid headroom when no direct DNO dataset is available.
+
+    // Optional live EPC overlay: if configured, prefer live gov.uk EPC Register data over the
+    // static blob snapshot (fresher current-energy-rating/floor-area), but keep the blob as
+    // the guaranteed fallback so the app still works without any keys.
+    const liveEpc = await fetchLiveEpcRecord(resolved.entry.uprn);
+    const epcSourceRecord = liveEpc
+      ? {
+          floor_area: liveEpc.floorArea || matchedRecord.floor_area,
+          property_type: liveEpc.propertyType || matchedRecord.property_type,
+          wall_description: liveEpc.wallDescription || matchedRecord.wall_description
+        }
+      : matchedRecord;
+
+    const physics = derivePhysics(epcSourceRecord, coords);
+
+    // Grid headroom: prefer a real DNO open-data lookup when DNO_API_URL is configured;
+    // otherwise fall back to the deterministic coordinate-hash proxy (clearly flagged as
+    // estimated, since it is not derived from any real network dataset).
+    const liveGrid = await fetchLiveGridHeadroom(coords.lat, coords.lon);
     const GRID_HEADROOM_BASE = 75;
     const GRID_HEADROOM_RANGE = 20;
     const GRID_LAT_SCALE = 1000;
     const GRID_LON_SCALE = 100;
     const gridHash = Math.round(Math.abs(coords.lat) * GRID_LAT_SCALE + Math.abs(coords.lon) * GRID_LON_SCALE);
-    const gridHeadroomPct = GRID_HEADROOM_BASE + (gridHash % GRID_HEADROOM_RANGE);
+    const estimatedGridHeadroomPct = GRID_HEADROOM_BASE + (gridHash % GRID_HEADROOM_RANGE);
+    const gridHeadroomPct = liveGrid ? liveGrid.headroomPct : estimatedGridHeadroomPct;
+
+    const standard = getApplicableStandard();
+    const currentEpcRating = liveEpc?.currentEnergyRating || matchedRecord.current_energy_rating || null;
 
     return res.status(200).json({
       success: true,
@@ -259,9 +457,20 @@ module.exports = async (req, res) => {
         postcode: matchedPostcode,
         uprn: resolved.entry.uprn,
         match_quality: resolved.matchQuality,
+        match_score: resolved.matchScore ?? null,
         property_type: physics.propType,
-        weather: { winter_design_temp: coords.winterDesignTemp },
-        grid: { headroom_pct: gridHeadroomPct, estimated: true },
+        epc_current_rating: currentEpcRating,
+        weather: {
+          winter_design_temp: coords.winterDesignTemp,
+          rain_exposure: coords.rainExposure,
+          annual_rainfall_mm: coords.annualRainMm
+        },
+        grid: { headroom_pct: gridHeadroomPct, estimated: !liveGrid },
+        standard: {
+          label: standard.label,
+          applies_from: standard.appliesFrom,
+          max_demand_kwh: standard.maxDemandKwh
+        },
         physics: {
           volume: physics.volume,
           wallArea: physics.wallArea,
@@ -273,6 +482,35 @@ module.exports = async (req, res) => {
           totalHTC: physics.totalHTC,
           currentDemand: physics.demandKwh,
           osFloorArea: physics.floorArea
+        },
+        // Per-domain provenance so the UI can label each figure as verified (real API
+        // response) vs estimated (deterministic fallback/proxy used when no live source
+        // is configured or reachable).
+        sources: {
+          epc: {
+            provider: liveEpc ? 'gov.uk EPC Register (live)' : 'EPC static snapshot',
+            verified: Boolean(liveEpc)
+          },
+          address_resolution: {
+            provider: resolved.matchQuality === 'fuzzy_address' ? 'Fuzzy address match' : 'EPC dataset exact match',
+            verified: resolved.matchQuality !== 'fuzzy_address'
+          },
+          geocoding: {
+            provider: 'postcodes.io',
+            verified: coords.geocodeVerified
+          },
+          weather: {
+            provider: 'Open-Meteo Archive API',
+            verified: coords.weatherVerified
+          },
+          rain: {
+            provider: 'Open-Meteo Archive API (precipitation)',
+            verified: coords.rainVerified
+          },
+          grid: {
+            provider: liveGrid ? liveGrid.source : 'Coordinate-based proxy (not a real DNO dataset)',
+            verified: Boolean(liveGrid)
+          }
         }
       }
     });

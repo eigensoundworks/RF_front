@@ -16,6 +16,15 @@ let gridCapacity = 88;
 let winterTemp = -3.8;
 let lastSuggestions = [];
 let isGridEstimate = true;
+let requiredStandard = { label: 'Target: Band C', maxDemandKwh: 120 };
+let gridSourceLabel = 'Grid Estimate';
+
+function setBadge(el, verified) {
+    if (!el) return;
+    el.textContent = verified ? 'Verified' : 'Estimated';
+    el.classList.remove('verified', 'estimated');
+    el.classList.add(verified ? 'verified' : 'estimated');
+}
 
 function normalizeText(value) {
     return (value || '').toUpperCase().replace(/\s+/g, ' ').trim();
@@ -165,10 +174,49 @@ async function loadSelectedApartment(selection) {
         gridCapacity = result.data.grid.headroom_pct;
         isGridEstimate = Boolean(result.data.grid.estimated);
         winterTemp = result.data.weather.winter_design_temp;
+        requiredStandard = {
+            label: result.data.standard?.label || 'Target: Band C',
+            maxDemandKwh: result.data.standard?.max_demand_kwh ?? 120
+        };
+
+        const sources = result.data.sources || {};
 
         document.getElementById('designTemp').textContent = `${winterTemp}°C`;
         document.getElementById('gridHeadroom').textContent = isGridEstimate ? `${gridCapacity}%*` : `${gridCapacity}%`;
-        document.getElementById('rainExposure').textContent = 'Severe (West Coast)';
+        document.getElementById('rainExposure').textContent = result.data.weather.rain_exposure
+            ? `${result.data.weather.rain_exposure} (${result.data.weather.annual_rainfall_mm} mm/yr)`
+            : '--';
+
+        setBadge(document.getElementById('weatherBadge'), Boolean(sources.weather?.verified));
+        setBadge(document.getElementById('rainBadge'), Boolean(sources.rain?.verified));
+        setBadge(document.getElementById('gridBadge'), Boolean(sources.grid?.verified));
+        setBadge(document.getElementById('epcBadge'), Boolean(sources.epc?.verified));
+
+        gridSourceLabel = sources.grid?.provider || (isGridEstimate ? 'Grid Estimate' : 'DNO Open Data');
+        const gridSourceLabelEl = document.getElementById('gridSourceLabel');
+        if (gridSourceLabelEl) gridSourceLabelEl.textContent = gridSourceLabel;
+
+        const epcRatingEl = document.getElementById('epcRating');
+        if (epcRatingEl) epcRatingEl.textContent = result.data.epc_current_rating || 'Unknown';
+
+        const epcSourceLabelEl = document.getElementById('epcSourceLabel');
+        if (epcSourceLabelEl) epcSourceLabelEl.textContent = sources.epc?.provider || 'EPC Register';
+
+        const standardLabelEl = document.getElementById('standardLabel');
+        if (standardLabelEl) standardLabelEl.textContent = `Target: ${requiredStandard.maxDemandKwh} kWh/m²/yr`;
+
+        const requiredStandardEl = document.getElementById('requiredStandard');
+        if (requiredStandardEl) requiredStandardEl.textContent = `${requiredStandard.maxDemandKwh} kWh/m²/yr`;
+
+        const banner = document.getElementById('matchQualityBanner');
+        if (banner) {
+            if (result.data.match_quality === 'fuzzy_address') {
+                banner.textContent = '⚠ Approximate match — no exact EPC/UPRN record found for this address. Results are estimates; please confirm details.';
+                banner.classList.remove('hidden');
+            } else {
+                banner.classList.add('hidden');
+            }
+        }
 
         document.querySelectorAll('.action-row').forEach((row) => { row.style.display = 'flex'; });
         if (activePropertyType.includes('ground floor') || activePropertyType.includes('mid floor')) {
@@ -213,11 +261,22 @@ function recalculateSandbox() {
 }
 
 function updateUI(demand) {
-    const isDemandFailing = demand > 120;
+    const target = requiredStandard.maxDemandKwh || 120;
+    const isDemandFailing = demand > target;
     const currentBand = demand <= 80 ? 'B' : (demand <= 120 ? 'C' : 'D');
 
     hrrScoreEl.textContent = currentBand;
     heatDemandEl.textContent = `${demand} kWh/m²/yr`;
+
+    const heetsaBandEl = document.getElementById('heetsaBand');
+    if (heetsaBandEl) heetsaBandEl.textContent = `Band ${currentBand} (${demand} kWh/m²/yr)`;
+
+    const complianceEl = document.getElementById('standardCompliance');
+    if (complianceEl) {
+        complianceEl.textContent = isDemandFailing ? '✗ Does not meet standard' : '✓ Meets standard';
+        complianceEl.classList.remove('compliance-pass', 'compliance-fail');
+        complianceEl.classList.add(isDemandFailing ? 'compliance-fail' : 'compliance-pass');
+    }
 
     if (isDemandFailing) {
         hrrScoreEl.classList.add('text-fail');
@@ -232,7 +291,7 @@ function updateUI(demand) {
     if (demand > 70) {
         lockHeatPump('🔒 Requires Demand ≤ 70 kWh/m²');
     } else if (gridCapacity < 85) {
-        lockHeatPump(`🔒 SPEN Grid Constrained (${gridCapacity}% Cap)`);
+        lockHeatPump(`🔒 ${gridSourceLabel} Constrained (${gridCapacity}% Cap)`);
     } else {
         toggleASHP.disabled = false;
         toggleASHP.closest('.switch').classList.remove('disabled-switch');

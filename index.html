@@ -30,10 +30,11 @@
                 <h2 class="panel-title">HEETSA SCORE</h2>
                 <div id="dialContainer" class="neumorphic-dial">
                     <span id="hrrScore" class="score-main">--</span>
-                    <span class="score-label">Target: Band C</span>
+                    <span class="score-label" id="standardLabel">Target: Band C</span>
                 </div>
                 <div class="demand-sub" id="heatDemand">-- kWh/m²/yr</div>
                 <div class="epc-meta" id="epcMeta">Awaiting Property Data...</div>
+                <div class="match-quality-banner hidden" id="matchQualityBanner"></div>
             </section>
 
             <section class="glass-panel sandbox-panel">
@@ -87,17 +88,39 @@
                 <div class="triage-card">
                     <span class="triage-label">Winter Design Temp</span>
                     <span class="triage-value" id="designTemp">--</span>
-                    <span class="triage-source">Open-Meteo API</span>
+                    <span class="triage-source">Open-Meteo API <span class="source-badge" id="weatherBadge"></span></span>
                 </div>
                 <div class="triage-card">
                     <span class="triage-label">Wind-Driven Rain</span>
                     <span class="triage-value" id="rainExposure">--</span>
-                    <span class="triage-source">Exposure Index</span>
+                    <span class="triage-source">Exposure Index <span class="source-badge" id="rainBadge"></span></span>
                 </div>
                 <div class="triage-card">
                     <span class="triage-label">Local Grid Headroom</span>
                     <span class="triage-value" id="gridHeadroom">--</span>
-                    <span class="triage-source">SPEN Transformer</span>
+                    <span class="triage-source"><span id="gridSourceLabel">Grid Estimate</span> <span class="source-badge" id="gridBadge"></span></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- EPC vs HEETSA vs Required Standard Comparison -->
+        <section class="glass-panel climate-section">
+            <h2 class="panel-title">EPC vs HEETSA vs REQUIRED STANDARD</h2>
+            <div class="triage-data-grid">
+                <div class="triage-card">
+                    <span class="triage-label">Current EPC Rating</span>
+                    <span class="triage-value" id="epcRating">--</span>
+                    <span class="triage-source"><span id="epcSourceLabel">EPC Register</span> <span class="source-badge" id="epcBadge"></span></span>
+                </div>
+                <div class="triage-card">
+                    <span class="triage-label">Calculated HEETSA Band</span>
+                    <span class="triage-value" id="heetsaBand">--</span>
+                    <span class="triage-source">From live physics model</span>
+                </div>
+                <div class="triage-card">
+                    <span class="triage-label">Required Standard</span>
+                    <span class="triage-value" id="requiredStandard">--</span>
+                    <span class="triage-source" id="standardCompliance">--</span>
                 </div>
             </div>
         </section>
