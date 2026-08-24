@@ -175,16 +175,14 @@ if (calculateBtn) {
                     return a === normInput || p === compactInput || u === compactInput;
                 });
 
-                if (!selected && fresh.length === 1) selected = fresh[0];
-
-                if (!selected && fresh.length > 1) {
-                    renderSuggestions(fresh);
-                    epcMetaEl.textContent = 'Multiple matches found — select the exact property.';
-                    return;
+                if (!selected && fresh.length > 0) {
+                    selected = fresh[0];
+                    postcodeInput.value = selected.address || selected.postcode || selected.uprn || rawInput;
+                    epcMetaEl.textContent = 'Using best Scottish match automatically.';
                 }
 
                 if (!selected) {
-                    epcMetaEl.textContent = 'No exact match found. Try adding house number + postcode.';
+                    epcMetaEl.textContent = 'No Scottish address match found. Try house number + postcode.';
                     return;
                 }
             } catch (error) {
