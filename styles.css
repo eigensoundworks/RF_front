@@ -84,6 +84,13 @@ body {
     .dashboard-grid { grid-template-columns: 1fr; }
 }
 
+@media (max-width: 560px) {
+    .triage-data-grid { grid-template-columns: 1fr; }
+    .seasonal-grid { grid-template-columns: 1fr; }
+    .top-search-bar { flex-direction: column; align-items: stretch; }
+    .neumorphic-btn-primary { width: 100%; }
+}
+
 .panel-title {
     font-family: var(--font-heading);
     font-size: 0.75rem;
@@ -136,6 +143,11 @@ body {
     font-family: var(--font-heading);
     color: var(--accent-green);
     line-height: 1;
+}
+
+.score-main.text-fail,
+.demand-sub.text-fail {
+    color: var(--fail-red);
 }
 
 .score-label {

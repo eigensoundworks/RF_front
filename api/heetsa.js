@@ -359,7 +359,9 @@ function derivePhysics(matchedRecord, coords) {
   const ventLoss = volume * finalACH * 0.33;
   const fabricLoss = wallArea * uWall + roofArea * uRoof + windowArea * 2.0;
   const totalHTC = ventLoss + fabricLoss;
-  const demandKwh = Math.round((totalHTC * 2500 * 24 * 0.75) / 1000 / floorArea);
+  // Demand (kWh/m²) = (Total HTC * Local HDD * 24) / 1000 / Floor Area, using the
+  // live site-specific Heating Degree Days derived from Open-Meteo archive data.
+  const demandKwh = Math.round((totalHTC * coords.annualHdd * 24) / 1000 / floorArea);
 
   return {
     floorArea,
@@ -392,79 +394,94 @@ function classifyRainExposure(annualRainMm, windSpeedMs) {
   return category;
 }
 
-async function resolveCoordinates(postcode) {
-  let lat = 55.9469;
-  let lon = -4.7565;
-  let geocodeVerified = false;
+const HDD_BASE_TEMP_C = 15.5;
 
-  if (postcode) {
-    try {
-      const geoRes = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`);
-      if (geoRes.ok) {
-        const geoData = await geoRes.json();
-        if (geoData?.result?.latitude && geoData?.result?.longitude) {
-          lat = geoData.result.latitude;
-          lon = geoData.result.longitude;
-          geocodeVerified = true;
-        }
-      }
-    } catch {}
+// Design temp is the outdoor temperature exceeded ~99.6% of the time (i.e. only
+// the coldest ~0.4% of days fall below it) - a standard heat-loss design metric.
+const DESIGN_TEMP_PERCENTILE = 0.004;
+
+function computeHeatingDegreeDays(dailyMeanTemps) {
+  return dailyMeanTemps.reduce((sum, t) => {
+    const temp = Number(t);
+    if (!Number.isFinite(temp)) return sum;
+    return sum + Math.max(0, HDD_BASE_TEMP_C - temp);
+  }, 0);
+}
+
+function computeWinterDesignTemp(dailyMinTemps) {
+  const values = dailyMinTemps.map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+  if (!values.length) return null;
+  const index = Math.min(values.length - 1, Math.floor(values.length * DESIGN_TEMP_PERCENTILE));
+  return values[index];
+}
+
+async function resolveCoordinates(postcode) {
+  if (!postcode) {
+    throw new Error('No postcode available to resolve live coordinates.');
   }
 
-  let windSpeedMs = 4.5;
-  let annualRainMm = 1200;
-  let windVerified = false;
-  let rainVerified = false;
+  const geoRes = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`);
+  if (!geoRes.ok) {
+    throw new Error('Live geocoding lookup failed (postcodes.io unavailable).');
+  }
 
-  try {
-    const year = new Date().getUTCFullYear() - 1;
-    const weatherRes = await fetch(
-      `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${year}-01-01&end_date=${year}-12-31&hourly=wind_speed_10m&daily=precipitation_sum&timezone=UTC`
-    );
+  const geoData = await geoRes.json();
+  const lat = geoData?.result?.latitude;
+  const lon = geoData?.result?.longitude;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    throw new Error('Live geocoding lookup returned no coordinates for this postcode.');
+  }
 
-    if (weatherRes.ok) {
-      const weatherData = await weatherRes.json();
+  const year = new Date().getUTCFullYear() - 1;
+  const weatherRes = await fetch(
+    `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${year}-01-01&end_date=${year}-12-31&hourly=wind_speed_10m&daily=precipitation_sum,temperature_2m_mean,temperature_2m_min&timezone=UTC`
+  );
 
-      const speeds = weatherData?.hourly?.wind_speed_10m;
-      if (Array.isArray(speeds) && speeds.length) {
-        windSpeedMs = speeds.reduce((a, b) => a + b, 0) / speeds.length / 3.6;
-        windVerified = true;
-      }
+  if (!weatherRes.ok) {
+    throw new Error('Live climate lookup failed (Open-Meteo archive unavailable).');
+  }
 
-      const rain = weatherData?.daily?.precipitation_sum;
-      if (Array.isArray(rain) && rain.length) {
-        annualRainMm = rain.reduce((a, b) => a + (Number(b) || 0), 0);
-        rainVerified = true;
-      }
-    }
-  } catch {}
+  const weatherData = await weatherRes.json();
+
+  const speeds = weatherData?.hourly?.wind_speed_10m;
+  if (!Array.isArray(speeds) || !speeds.length) {
+    throw new Error('Live climate lookup returned no wind speed data.');
+  }
+  const windSpeedMs = speeds.reduce((a, b) => a + (Number(b) || 0), 0) / speeds.length / 3.6;
+
+  const meanTemps = weatherData?.daily?.temperature_2m_mean;
+  const minTemps = weatherData?.daily?.temperature_2m_min;
+  if (!Array.isArray(meanTemps) || !meanTemps.length || !Array.isArray(minTemps) || !minTemps.length) {
+    throw new Error('Live climate lookup returned no temperature data.');
+  }
+
+  const annualHdd = computeHeatingDegreeDays(meanTemps);
+  const winterDesignTemp = computeWinterDesignTemp(minTemps);
+  if (winterDesignTemp === null) {
+    throw new Error('Unable to derive a winter design temperature from live climate data.');
+  }
+
+  const rain = weatherData?.daily?.precipitation_sum;
+  const annualRainMm = Array.isArray(rain) && rain.length
+    ? rain.reduce((a, b) => a + (Number(b) || 0), 0)
+    : 0;
+  const rainVerified = Array.isArray(rain) && rain.length > 0;
 
   return {
     lat,
     lon,
     windSpeedMs,
-    winterDesignTemp: lat > 56.0 ? -5.5 : -3.8,
+    winterDesignTemp: Math.round(winterDesignTemp * 10) / 10,
+    annualHdd: Math.round(annualHdd),
     annualRainMm: Math.round(annualRainMm),
     rainExposure: classifyRainExposure(annualRainMm, windSpeedMs),
-    geocodeVerified,
-    weatherVerified: windVerified || rainVerified,
+    geocodeVerified: true,
+    weatherVerified: true,
     rainVerified
   };
 }
 
-const REQUIRED_STANDARDS = [
-  { appliesFrom: '2025-01-01', label: 'Current Minimum (Band D equivalent)', maxDemandKwh: 150 },
-  { appliesFrom: '2028-01-01', label: 'Proposed Interim Standard (Band C equivalent)', maxDemandKwh: 120 },
-  { appliesFrom: '2033-01-01', label: 'Proposed Final Standard (Band B equivalent)', maxDemandKwh: 80 }
-];
-
-function getApplicableStandard(referenceDate = new Date()) {
-  let applicable = REQUIRED_STANDARDS[0];
-  for (const standard of REQUIRED_STANDARDS) {
-    if (new Date(standard.appliesFrom) <= referenceDate) applicable = standard;
-  }
-  return applicable;
-}
+const REQUIRED_STANDARD = { label: 'Required Standard', maxDemandKwh: 120 };
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -526,13 +543,6 @@ module.exports = async (req, res) => {
       await fetchLiveGridHeadroom(coords.lat, coords.lon) ||
       await fetchSpenHeatmapHeadroom(coords.lat, coords.lon);
 
-    const GRID_HEADROOM_BASE = 75;
-    const GRID_HEADROOM_RANGE = 20;
-    const hash = Math.round(Math.abs(coords.lat) * 1000 + Math.abs(coords.lon) * 100);
-    const estimatedGridHeadroomPct = GRID_HEADROOM_BASE + (hash % GRID_HEADROOM_RANGE);
-
-    const standard = getApplicableStandard();
-
     return res.status(200).json({
       success: true,
       data: {
@@ -545,17 +555,17 @@ module.exports = async (req, res) => {
         epc_current_rating: resolved.current_energy_rating,
         weather: {
           winter_design_temp: coords.winterDesignTemp,
+          annual_hdd: coords.annualHdd,
           rain_exposure: coords.rainExposure,
           annual_rainfall_mm: coords.annualRainMm
         },
         grid: {
-          headroom_pct: liveGrid ? liveGrid.headroomPct : estimatedGridHeadroomPct,
+          headroom_pct: liveGrid ? liveGrid.headroomPct : null,
           estimated: !liveGrid
         },
         standard: {
-          label: standard.label,
-          applies_from: standard.appliesFrom,
-          max_demand_kwh: standard.maxDemandKwh
+          label: REQUIRED_STANDARD.label,
+          max_demand_kwh: REQUIRED_STANDARD.maxDemandKwh
         },
         physics: {
           volume: physics.volume,
@@ -567,7 +577,8 @@ module.exports = async (req, res) => {
           finalACH: physics.finalACH,
           totalHTC: physics.totalHTC,
           currentDemand: physics.demandKwh,
-          osFloorArea: physics.floorArea
+          osFloorArea: physics.floorArea,
+          annualHdd: coords.annualHdd
         },
         sources: {
           epc: { provider: 'api.epcdata.scot/ew-compatible', verified: true },
@@ -576,7 +587,7 @@ module.exports = async (req, res) => {
           weather: { provider: 'Open-Meteo Archive API', verified: coords.weatherVerified },
           rain: { provider: 'Open-Meteo Archive API (precipitation)', verified: coords.rainVerified },
           grid: {
-            provider: liveGrid ? liveGrid.source : 'Coordinate-based proxy (not a real DNO dataset)',
+            provider: liveGrid ? liveGrid.source : 'No live DNO/grid dataset available',
             verified: Boolean(liveGrid)
           }
         }
