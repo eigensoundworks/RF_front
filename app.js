@@ -14,18 +14,18 @@ let activePhysics = null;
 let gridCapacity = 88;
 let winterTemp = -3.8;
 
-// --- STEP 1: Predictive Address & Apartment Search ---
+// Predictive typing for apartments & flats
 postcodeInput.addEventListener('input', (e) => {
     clearTimeout(debounceTimer);
     const val = e.target.value.trim();
     if (val.length >= 3) {
-        debounceTimer = setTimeout(() => fetchPredictions(val), 300);
+        debounceTimer = setTimeout(() => fetchApartmentPredictions(val), 300);
     } else if (addressDropdown) {
         addressDropdown.classList.add('hidden');
     }
 });
 
-async function fetchPredictions(query) {
+async function fetchApartmentPredictions(query) {
     if (!addressDropdown) return;
     try {
         const response = await fetch(`${API_ENDPOINT}?search=${encodeURIComponent(query)}`);
@@ -39,7 +39,7 @@ async function fetchPredictions(query) {
                 li.onclick = () => {
                     postcodeInput.value = item.address;
                     addressDropdown.classList.add('hidden');
-                    loadSelectedProperty(item.address);
+                    loadSelectedApartment(item.address);
                 };
                 addressDropdown.appendChild(li);
             });
@@ -52,25 +52,21 @@ async function fetchPredictions(query) {
     }
 }
 
-// Hide dropdown when clicking outside
 document.addEventListener('click', (e) => {
     if (addressDropdown && !e.target.closest('.search-input-wrapper')) {
         addressDropdown.classList.add('hidden');
     }
 });
 
-// --- STEP 2: Load Selected Property Physics ---
-async function loadSelectedProperty(address) {
+async function loadSelectedApartment(address) {
     hrrScoreEl.textContent = '...';
-    epcMetaEl.textContent = `Matching EPC & running HEETSA for ${address}...`;
+    epcMetaEl.textContent = `Loading exact apartment physics for ${address}...`;
 
     try {
         const response = await fetch(`${API_ENDPOINT}?address=${encodeURIComponent(address)}`);
         const result = await response.json();
         
-        if (!response.ok || !result.success) {
-            throw new Error(result.error || "Failed to calculate physics.");
-        }
+        if (!response.ok || !result.success) throw new Error(result.error || "Failed.");
         
         activePhysics = result.data.physics;
         const activePropertyType = result.data.property_type || "house";
@@ -81,7 +77,7 @@ async function loadSelectedProperty(address) {
         document.getElementById('gridHeadroom').textContent = `${gridCapacity}%`;
         document.getElementById('rainExposure').textContent = "Severe (West Coast)";
 
-        // Hide impossible toggles (e.g., ground floor flats don't get loft insulation)
+        // Hide loft insulation toggle if it's a ground or mid-floor flat (no roof access)
         document.querySelectorAll('.action-row').forEach(row => row.style.display = 'flex'); 
         if (activePropertyType.includes('ground floor') || activePropertyType.includes('mid floor')) {
             const loftToggle = document.getElementById('toggleLoft');
@@ -94,10 +90,9 @@ async function loadSelectedProperty(address) {
         recalculateSandbox();
 
     } catch (error) {
-        console.error("Property load error:", error);
+        console.error("Load error:", error);
         alert(`API Error: ${error.message}`);
         hrrScoreEl.textContent = 'ERR';
-        epcMetaEl.textContent = 'Connection Failed.';
     }
 }
 
@@ -175,11 +170,11 @@ function updateCharts(annualDemandKwh, newHTC) {
     const barWinter = document.getElementById('barWinter');
     const barSummer = document.getElementById('barSummer');
 
-    if (valWinter) valWinter.textContent = `${winterKwh} kWh`;
-    if (barWinter) barWinter.style.height = `${Math.min(100, (winterKwh / 5000) * 100)}px`;
+    if (valWinter) valWinter.textContent = winterKwh.toLocaleString();
+    if (barWinter) barWinter.style.width = `${Math.min(100, (winterKwh / (activePhysics.osFloorArea * 180)) * 100)}%`;
 
-    if (valSummer) valSummer.textContent = `${summerGainKwh} kWh`;
-    if (barSummer) barSummer.style.height = `${Math.min(100, (summerGainKwh / 1500) * 100)}px`;
+    if (valSummer) valSummer.textContent = summerGainKwh.toLocaleString();
+    if (barSummer) barSummer.style.width = `${Math.min(100, (summerGainKwh / (activePhysics.osFloorArea * 50)) * 100)}%`;
 }
 
 document.querySelectorAll('.switch input').forEach(toggle => {
