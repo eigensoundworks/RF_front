@@ -11,8 +11,6 @@
 </head>
 <body>
     <div class="app-container">
-        
-        <!-- Search Bar with Predictive Apartment Dropdown -->
         <header class="top-search-bar glass-panel">
             <div class="search-input-wrapper">
                 <input type="text" id="postcodeInput" placeholder="Type Apartment Address or Postcode (e.g., Ardgowan Street)" autocomplete="off">
@@ -23,24 +21,44 @@
             </button>
         </header>
 
-        <!-- Dashboard Grid -->
         <div class="dashboard-grid">
-            
-            <section class="score-panel glass-panel">
-                <h2 class="panel-title">HEETSA SCORE</h2>
-                <div id="dialContainer" class="neumorphic-dial">
-                    <span id="hrrScore" class="score-main">--</span>
-                    <span class="score-label" id="standardLabel">Target: Band C</span>
-                </div>
-                <div class="demand-sub" id="heatDemand">-- kWh/m²/yr</div>
-                <div class="epc-meta" id="epcMeta">Awaiting Property Data...</div>
-                <div class="match-quality-banner hidden" id="matchQualityBanner"></div>
-            </section>
+            <div class="left-column-stack">
+                <section class="score-panel glass-panel">
+                    <h2 class="panel-title">HEETSA SCORE</h2>
+                    <div id="dialContainer" class="neumorphic-dial dial-pass">
+                        <span id="hrrScore" class="score-main">--</span>
+                        <span class="score-label" id="standardLabel">Target: 120 kWh/m²</span>
+                    </div>
+                    <div class="demand-sub" id="heatDemand">-- kWh/m²</div>
+                    <div class="epc-meta" id="epcMeta">Awaiting Property Data...</div>
+                    <div class="match-quality-banner hidden" id="matchQualityBanner"></div>
+                </section>
+
+                <section class="glass-panel climate-section">
+                    <h2 class="panel-title">EPC vs HEETSA vs REQUIRED STANDARD (120 kWh/m²)</h2>
+                    <div class="triage-data-grid">
+                        <div class="triage-card">
+                            <span class="triage-label">Current EPC Rating</span>
+                            <span class="triage-value" id="epcRating">--</span>
+                            <span class="triage-source"><span id="epcSourceLabel">EPC Register</span> <span class="source-badge" id="epcBadge"></span></span>
+                        </div>
+                        <div class="triage-card">
+                            <span class="triage-label">Calculated HEETSA Band</span>
+                            <span class="triage-value" id="heetsaBand">--</span>
+                            <span class="triage-source">From live physics model</span>
+                        </div>
+                        <div class="triage-card">
+                            <span class="triage-label">Required Standard</span>
+                            <span class="triage-value" id="requiredStandard">120 kWh/m²</span>
+                            <span class="triage-source" id="standardCompliance">--</span>
+                        </div>
+                    </div>
+                </section>
+            </div>
 
             <section class="glass-panel sandbox-panel">
                 <h2 class="panel-title">RETROFIT SANDBOX</h2>
                 <span class="card-subtitle">Group A: Fabric Upgrades (Impacts HRR)</span>
-                
                 <div class="action-row">
                     <div class="action-info">
                         <span class="action-title">Improve Loft Insulation</span>
@@ -48,7 +66,6 @@
                     </div>
                     <label class="switch"><input type="checkbox" id="toggleLoft"><span class="slider"></span></label>
                 </div>
-
                 <div class="action-row">
                     <div class="action-info">
                         <span class="action-title">Internal Wall Insulation (IWI)</span>
@@ -56,7 +73,6 @@
                     </div>
                     <label class="switch"><input type="checkbox" id="toggleIWI"><span class="slider"></span></label>
                 </div>
-
                 <div class="action-row">
                     <div class="action-info">
                         <span class="action-title">External Wall Insulation (EWI)</span>
@@ -64,9 +80,7 @@
                     </div>
                     <label class="switch"><input type="checkbox" id="toggleEWI"><span class="slider"></span></label>
                 </div>
-
                 <div class="divider-horizontal"></div>
-                
                 <span class="card-subtitle">Group B: Clean Heating (Zero HRR Impact)</span>
                 <div class="action-row">
                     <div class="action-info">
@@ -81,7 +95,6 @@
             </section>
         </div>
 
-        <!-- Triage Constraints Panel -->
         <section class="glass-panel climate-section">
             <h2 class="panel-title">LOCAL CLIMATE & GRID CONSTRAINTS</h2>
             <div class="triage-data-grid">
@@ -103,58 +116,27 @@
             </div>
         </section>
 
-        <!-- EPC vs HEETSA vs Required Standard Comparison -->
-        <section class="glass-panel climate-section">
-            <h2 class="panel-title">EPC vs HEETSA vs REQUIRED STANDARD</h2>
-            <div class="triage-data-grid">
-                <div class="triage-card">
-                    <span class="triage-label">Current EPC Rating</span>
-                    <span class="triage-value" id="epcRating">--</span>
-                    <span class="triage-source"><span id="epcSourceLabel">EPC Register</span> <span class="source-badge" id="epcBadge"></span></span>
-                </div>
-                <div class="triage-card">
-                    <span class="triage-label">Calculated HEETSA Band</span>
-                    <span class="triage-value" id="heetsaBand">--</span>
-                    <span class="triage-source">From live physics model</span>
-                </div>
-                <div class="triage-card">
-                    <span class="triage-label">Required Standard</span>
-                    <span class="triage-value" id="requiredStandard">--</span>
-                    <span class="triage-source" id="standardCompliance">--</span>
-                </div>
-            </div>
-        </section>
-
-        <!-- Winter vs Summer Seasonal Comparison -->
         <section class="glass-panel climate-section">
             <h2 class="panel-title">SEASONAL PERFORMANCE <span class="card-subtitle" style="display:inline; text-transform:none;">(Winter Heating vs. Summer Overheating Risk)</span></h2>
             <div class="seasonal-grid">
-                
                 <div class="seasonal-card">
                     <span class="seasonal-title">WINTER HEATING DEMAND</span>
                     <div class="seasonal-value-box">
                         <span id="valWinter" class="seasonal-number">--</span>
                         <span class="seasonal-unit">kWh/yr</span>
                     </div>
-                    <div class="progress-bar-bg">
-                        <div id="barWinter" class="progress-bar-fill winter-fill"></div>
-                    </div>
+                    <div class="progress-bar-bg"><div id="barWinter" class="progress-bar-fill winter-fill"></div></div>
                 </div>
-
                 <div class="seasonal-card">
                     <span class="seasonal-title">SUMMER OVERHEATING RISK</span>
                     <div class="seasonal-value-box">
                         <span id="valSummer" class="seasonal-number">--</span>
                         <span class="seasonal-unit">kWh/yr</span>
                     </div>
-                    <div class="progress-bar-bg">
-                        <div id="barSummer" class="progress-bar-fill summer-fill"></div>
-                    </div>
+                    <div class="progress-bar-bg"><div id="barSummer" class="progress-bar-fill summer-fill"></div></div>
                 </div>
-
             </div>
         </section>
-        
     </div>
     <script src="app.js"></script>
 </body>
