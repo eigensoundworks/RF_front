@@ -4,21 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HEETSA Remote Triage Engine</title>
-    
-    <!-- Agreed Typography: Manrope & Nunito Sans -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
-    
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="app-container">
         
-        <!-- Top Search Bar -->
+        <!-- Search & Autocomplete -->
         <header class="top-search-bar glass-panel">
             <div class="search-input-wrapper">
-                <input type="text" id="postcodeInput" placeholder="Enter Scottish Postcode (e.g., PA16 8LG)">
+                <input type="text" id="postcodeInput" placeholder="Enter Scottish Postcode (e.g., PA16 8LG)" autocomplete="off">
+                <ul id="addressDropdown" class="autocomplete-dropdown hidden"></ul>
             </div>
             <button id="calculateBtn" class="neumorphic-btn-primary">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -29,7 +27,6 @@
         <!-- Main Dashboard Grid -->
         <div class="dashboard-grid">
             
-            <!-- Core Dial (Driven purely by Fabric) -->
             <section class="score-panel glass-panel">
                 <h2 class="panel-title">HEETSA SCORE</h2>
                 <div id="dialContainer" class="neumorphic-dial">
@@ -40,7 +37,6 @@
                 <div class="epc-meta" id="epcMeta" style="font-weight: 700; color: var(--text-main);">Awaiting Property Data...</div>
             </section>
 
-            <!-- Differential Sandbox (Strictly Grouped) -->
             <section class="glass-panel sandbox-panel">
                 <h2 class="panel-title">RETROFIT SANDBOX</h2>
                 <span class="card-subtitle">Group A: Fabric Upgrades (Impacts HRR)</span>
@@ -83,38 +79,67 @@
                     </label>
                 </div>
             </section>
-
         </div>
 
-        <!-- Bottom Panel: Actionable Climate & Grid Data -->
+        <!-- Triage Constraints Panel -->
         <section class="glass-panel climate-section">
             <h2 class="panel-title">LOCAL CLIMATE & GRID CONSTRAINTS</h2>
             <div class="triage-data-grid">
-                
                 <div class="triage-card">
                     <span class="triage-label">Winter Design Temp</span>
                     <span class="triage-value" id="designTemp">--</span>
                     <span class="triage-source">Open-Meteo</span>
                 </div>
-                
                 <div class="triage-card">
                     <span class="triage-label">Wind-Driven Rain</span>
                     <span class="triage-value" id="rainExposure">--</span>
                     <span class="triage-source">Exposure Index</span>
                 </div>
-                
                 <div class="triage-card">
                     <span class="triage-label">Local Grid Headroom</span>
                     <span class="triage-value" id="gridHeadroom">--</span>
                     <span class="triage-source">SPEN Transformer</span>
                 </div>
-                
+            </div>
+        </section>
+
+        <!-- Seasonal Performance Charts -->
+        <section class="glass-panel climate-section">
+            <h2 class="panel-title">PROPERTY SEASONAL PERFORMANCE <span class="card-subtitle" style="display:inline; text-transform:none;">(Live Differential Output)</span></h2>
+            <div class="charts-container">
+                <div class="chart-group">
+                    <h4>WINTER <span class="sub-muted">(Heating Demand)</span></h4>
+                    <div class="bars-flex">
+                        <div class="bar-col"><div class="bar" id="barDec" style="height: 0px;"></div><span>Dec</span><small id="valDec">--</small></div>
+                        <div class="bar-col"><div class="bar" id="barJan" style="height: 0px;"></div><span>Jan</span><small id="valJan">--</small></div>
+                        <div class="bar-col"><div class="bar" id="barFeb" style="height: 0px;"></div><span>Feb</span><small id="valFeb">--</small></div>
+                        <div class="bar-col"><div class="bar" id="barMar" style="height: 0px;"></div><span>Mar</span><small id="valMar">--</small></div>
+                    </div>
+                </div>
+                <div class="divider-vertical"></div>
+                <div class="chart-group">
+                    <h4>SUMMER <span class="sub-muted">(Cooling & Overheating Risk)</span></h4>
+                    <div class="summer-split">
+                        <div class="sub-chart">
+                            <span class="mini-label">Cooling Demand</span>
+                            <div class="bars-flex">
+                                <div class="bar-col"><div class="bar small" id="barJunCool" style="height: 0px;"></div><span>Jun</span><small id="valJunCool">--</small></div>
+                                <div class="bar-col"><div class="bar small" id="barJulCool" style="height: 0px;"></div><span>Jul</span><small id="valJulCool">--</small></div>
+                            </div>
+                        </div>
+                        <div class="sub-chart">
+                            <span class="mini-label">Solar Heat Gain</span>
+                            <div class="bars-flex">
+                                <div class="bar-col"><div class="bar small" id="barJunGain" style="height: 0px;"></div><span>Jun</span><small id="valJunGain">--</small></div>
+                                <div class="bar-col"><div class="bar small" id="barJulGain" style="height: 0px;"></div><span>Jul</span><small id="valJulGain">--</small></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
         
     </div>
-    
-    <!-- Load Differential Logic -->
     <script src="app.js"></script>
 </body>
 </html>
