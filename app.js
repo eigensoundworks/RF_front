@@ -2,6 +2,7 @@ const API_ENDPOINT = 'https://rf-back.vercel.app/api/heetsa';
 
 // DOM Elements
 const postcodeInput = document.getElementById('postcodeInput');
+const calculateBtn = document.getElementById('calculateBtn');
 const addressDropdown = document.getElementById('addressDropdown');
 const hrrScoreEl = document.getElementById('hrrScore');
 const heatDemandEl = document.getElementById('heatDemand');
@@ -17,24 +18,23 @@ let gridCapacity = 100;
 let winterTemp = 0;
 
 // --- STEP 1: Address Autocomplete ---
-if (postcodeInput) {
-    postcodeInput.addEventListener('input', (e) => {
-        clearTimeout(debounceTimer);
-        const val = e.target.value.trim();
-        if (val.length >= 5) {
-            debounceTimer = setTimeout(() => fetchAddressList(val), 500);
-        } else if (addressDropdown) {
-            addressDropdown.classList.add('hidden');
-        }
-    });
-}
+postcodeInput.addEventListener('input', (e) => {
+    clearTimeout(debounceTimer);
+    const val = e.target.value.trim();
+    if (val.length >= 5) {
+        debounceTimer = setTimeout(() => fetchAddressList(val), 500);
+    } else {
+        addressDropdown.classList.add('hidden');
+    }
+});
 
 async function fetchAddressList(postcode) {
-    if (!addressDropdown) return;
     try {
         const response = await fetch(`${API_ENDPOINT}?postcode=${encodeURIComponent(postcode)}`);
+        if (!response.ok) throw new Error("Backend connection failed.");
         const result = await response.json();
-        if (result.addresses) {
+        
+        if (result.addresses && result.addresses.length > 0) {
             addressDropdown.innerHTML = '';
             result.addresses.forEach(addr => {
                 const li = document.createElement('li');
@@ -44,43 +44,62 @@ async function fetchAddressList(postcode) {
             });
             addressDropdown.classList.remove('hidden');
         }
-    } catch (error) { console.error("Autocomplete fetch error:", error); }
+    } catch (error) { 
+        console.error("Autocomplete error:", error); 
+    }
 }
 
 document.addEventListener('click', (e) => {
-    if (addressDropdown && !e.target.closest('.search-input-wrapper')) {
+    if (!e.target.closest('.search-input-wrapper')) {
         addressDropdown.classList.add('hidden');
+    }
+});
+
+// --- STEP 1b: Manual Button Click (Restored) ---
+calculateBtn.addEventListener('click', () => {
+    const val = postcodeInput.value.trim();
+    if (val.length >= 5) {
+        // If they just typed a postcode and clicked the button, load the default fallback address
+        loadSpecificProperty(val, '');
+    } else {
+        alert("Please enter a valid Scottish postcode.");
     }
 });
 
 // --- STEP 2: Load Specific Property ---
 async function loadSpecificProperty(postcode, address) {
-    if (postcodeInput) postcodeInput.value = address;
-    if (addressDropdown) addressDropdown.classList.add('hidden');
-    if (hrrScoreEl) hrrScoreEl.textContent = '...';
+    if (address) postcodeInput.value = address;
+    addressDropdown.classList.add('hidden');
+    hrrScoreEl.textContent = '...';
+    epcMetaEl.textContent = 'Contacting HEETSA Engine...';
 
     try {
-        const response = await fetch(`${API_ENDPOINT}?postcode=${encodeURIComponent(postcode)}&address=${encodeURIComponent(address)}`);
+        const fetchUrl = address ? 
+            `${API_ENDPOINT}?postcode=${encodeURIComponent(postcode)}&address=${encodeURIComponent(address)}` : 
+            `${API_ENDPOINT}?postcode=${encodeURIComponent(postcode)}`;
+            
+        const response = await fetch(fetchUrl);
         const result = await response.json();
         
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || "Failed to load property data.");
+        }
+        
         activePhysics = result.data.physics;
-        activePropertyType = result.data.property_type;
-        gridCapacity = result.data.grid.headroom_pct;
-        winterTemp = result.data.weather.winter_design_temp;
+        activePropertyType = result.data.property_type || "house";
+        gridCapacity = result.data.grid ? result.data.grid.headroom_pct : 100;
+        winterTemp = result.data.weather ? result.data.weather.winter_design_temp : -3.8;
 
-        // Safely Populate Climate/Grid UI if those boxes exist in your HTML
-        const designTempEl = document.getElementById('designTemp');
-        if (designTempEl) designTempEl.textContent = `${winterTemp}°C`;
-
-        const gridHeadroomEl = document.getElementById('gridHeadroom');
-        if (gridHeadroomEl) gridHeadroomEl.textContent = `${gridCapacity}%`;
+        // Populate Climate/Grid UI
+        document.getElementById('designTemp').textContent = `${winterTemp}°C`;
+        document.getElementById('gridHeadroom').textContent = `${gridCapacity}%`;
+        document.getElementById('rainExposure').textContent = "Severe"; // Static proxy for now
 
         // DYNAMIC TOGGLE FILTERING
         document.querySelectorAll('.action-row').forEach(row => row.style.display = 'flex'); 
         
         if (activePropertyType.includes('ground floor') || activePropertyType.includes('mid floor')) {
-            const loftToggle = document.getElementById('toggleLoft');
-            if (loftToggle) loftToggle.closest('.action-row').style.display = 'none';
+            document.getElementById('toggleLoft').closest('.action-row').style.display = 'none';
         }
         
         document.querySelectorAll('.switch input').forEach(el => el.checked = false);
@@ -90,13 +109,15 @@ async function loadSpecificProperty(postcode, address) {
 
     } catch (error) {
         console.error("Property load error:", error);
-        if (hrrScoreEl) hrrScoreEl.textContent = 'ERR';
+        alert(`API Error: ${error.message}\nMake sure your Vercel backend is deployed and running.`);
+        hrrScoreEl.textContent = 'ERR';
+        epcMetaEl.textContent = 'Connection Failed.';
     }
 }
 
 // --- STEP 3: Differential Sandbox & REAL Score ---
 function calculateMaxPotential() {
-    if (!activePhysics || !epcMetaEl) return;
+    if (!activePhysics) return;
     
     let { volume, wallArea, roofArea, windowArea, finalACH, osFloorArea } = activePhysics;
     
@@ -116,12 +137,8 @@ function recalculateSandbox() {
 
     let { volume, wallArea, roofArea, windowArea, uWall, uRoof, finalACH, osFloorArea } = activePhysics;
 
-    const toggleLoft = document.getElementById('toggleLoft');
-    const toggleIWI = document.getElementById('toggleIWI');
-    const toggleEWI = document.getElementById('toggleEWI');
-
-    if (toggleLoft && toggleLoft.checked && roofArea > 0) uRoof = 0.11;
-    if ((toggleIWI && toggleIWI.checked) || (toggleEWI && toggleEWI.checked)) uWall = 0.3;
+    if (document.getElementById('toggleLoft').checked && roofArea > 0) uRoof = 0.11;
+    if (document.getElementById('toggleIWI').checked || document.getElementById('toggleEWI').checked) uWall = 0.3;
 
     const ventLoss = volume * finalACH * 0.33;
     const fabricLoss = (wallArea * uWall) + (roofArea * uRoof) + (windowArea * 2.0);
@@ -134,8 +151,6 @@ function recalculateSandbox() {
 }
 
 function updateUI(demand) {
-    if (!hrrScoreEl || !heatDemandEl) return;
-
     const isDemandFailing = demand > 120;
     
     let currentBand = 'E';
@@ -146,34 +161,29 @@ function updateUI(demand) {
     hrrScoreEl.textContent = currentBand;
     heatDemandEl.textContent = `${demand} kWh/m²/yr`;
 
-    if (dialContainer) {
-        if (isDemandFailing) {
-            hrrScoreEl.classList.add('text-fail');
-            dialContainer.classList.add('dial-fail');
-            heatDemandEl.classList.add('text-fail');
-        } else {
-            hrrScoreEl.classList.remove('text-fail');
-            dialContainer.classList.remove('dial-fail');
-            heatDemandEl.classList.remove('text-fail');
-        }
+    if (isDemandFailing) {
+        hrrScoreEl.classList.add('text-fail');
+        dialContainer.classList.add('dial-fail');
+        heatDemandEl.classList.add('text-fail');
+    } else {
+        hrrScoreEl.classList.remove('text-fail');
+        dialContainer.classList.remove('dial-fail');
+        heatDemandEl.classList.remove('text-fail');
     }
 
-    if (toggleASHP && ashpGatekeeper) {
-        if (demand > 70) {
-            lockHeatPump(`🔒 Requires Demand ≤ 70 kWh/m²`);
-        } else if (gridCapacity < 85) {
-            lockHeatPump(`🔒 SPEN Grid Constrained (${gridCapacity}% Cap)`);
-        } else {
-            toggleASHP.disabled = false;
-            toggleASHP.closest('.switch').classList.remove('disabled-switch');
-            ashpGatekeeper.textContent = "✓ Fabric & Grid thresholds met";
-            ashpGatekeeper.style.color = "var(--accent-green)";
-        }
+    if (demand > 70) {
+        lockHeatPump(`🔒 Requires Demand ≤ 70 kWh/m²`);
+    } else if (gridCapacity < 85) {
+        lockHeatPump(`🔒 SPEN Grid Constrained (${gridCapacity}% Cap)`);
+    } else {
+        toggleASHP.disabled = false;
+        toggleASHP.closest('.switch').classList.remove('disabled-switch');
+        ashpGatekeeper.textContent = "✓ Fabric & Grid thresholds met";
+        ashpGatekeeper.style.color = "var(--accent-green)";
     }
 }
 
 function lockHeatPump(message) {
-    if (!toggleASHP || !ashpGatekeeper) return;
     toggleASHP.disabled = true;
     toggleASHP.checked = false;
     toggleASHP.closest('.switch').classList.add('disabled-switch');
@@ -182,16 +192,13 @@ function lockHeatPump(message) {
 }
 
 function updateCharts(annualDemandKwh, newHTC) {
-    const valDec = document.getElementById('valDec');
-    if (!valDec) return; // If charts aren't in the HTML, skip this entirely so it doesn't crash
-
     const totalHeatingKwh = annualDemandKwh * activePhysics.osFloorArea;
     const dec = Math.round(totalHeatingKwh * 0.18);
     const jan = Math.round(totalHeatingKwh * 0.20);
     const feb = Math.round(totalHeatingKwh * 0.16);
     const mar = Math.round(totalHeatingKwh * 0.12);
 
-    valDec.textContent = `${dec}kWh`;
+    document.getElementById('valDec').textContent = `${dec}kWh`;
     document.getElementById('valJan').textContent = `${jan}kWh`;
     document.getElementById('valFeb').textContent = `${feb}kWh`;
     document.getElementById('valMar').textContent = `${mar}kWh`;
