@@ -71,47 +71,17 @@ body {
 .dashboard-grid {
     display: grid;
     grid-template-columns: 320px 1fr;
-    align-items: stretch;
     gap: 1.2rem;
 }
 
-.score-panel,
-.sandbox-panel {
+.left-column-stack {
     display: flex;
     flex-direction: column;
-    height: 100%;
-    min-height: 400px;
-}
-
-.score-panel {
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-    gap: 0.4rem;
-}
-
-.score-panel .panel-title {
-    align-self: flex-start;
+    gap: 1.5rem;
 }
 
 @media (max-width: 850px) {
     .dashboard-grid { grid-template-columns: 1fr; }
-    .triage-data-grid { grid-template-columns: repeat(3, 1fr); }
-}
-
-@media (max-width: 700px) {
-    .triage-data-grid { grid-template-columns: repeat(2, 1fr); }
-}
-
-@media (max-width: 560px) {
-    .triage-data-grid { grid-template-columns: 1fr; }
-    .seasonal-grid { grid-template-columns: 1fr; }
-    .top-search-bar { flex-direction: column; align-items: stretch; }
-    .neumorphic-btn-primary { width: 100%; }
-    .neumorphic-dial { width: 130px; height: 130px; }
-    .score-main { font-size: 2rem; }
-    body { padding: 1rem; }
-    .glass-panel { padding: 1rem 1.1rem; }
 }
 
 .panel-title {
@@ -124,8 +94,8 @@ body {
 }
 
 .neumorphic-dial {
-    width: 180px;
-    height: 180px;
+    width: 154px;
+    height: 154px;
     margin: 0.8rem auto;
     border-radius: 50%;
     background: linear-gradient(145deg, #f3f7ff, #d7ddeb);
@@ -168,11 +138,6 @@ body {
     line-height: 1;
 }
 
-.score-main.text-fail,
-.demand-sub.text-fail {
-    color: var(--fail-red);
-}
-
 .score-label {
     font-size: 0.65rem;
     font-weight: 700;
@@ -187,13 +152,13 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.45rem 0;
+    padding: 0.6rem 0;
     border-bottom: 1px solid rgba(184, 199, 224, 0.4);
 }
 
 .action-title { font-weight: 700; font-size: 0.85rem; display: block; }
 .action-tag { font-size: 0.7rem; font-weight: 600; color: var(--accent-green); }
-.card-subtitle { font-size: 0.7rem; color: var(--text-muted); display: block; margin-bottom: 0.35rem; }
+.card-subtitle { font-size: 0.7rem; color: var(--text-muted); display: block; margin-bottom: 0.5rem; }
 
 .switch { position: relative; display: inline-block; width: 40px; height: 22px; }
 .switch input { opacity: 0; width: 0; height: 0; }
