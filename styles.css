@@ -79,6 +79,17 @@ body {
 .sandbox-panel {
     display: flex;
     flex-direction: column;
+    height: 100%;
+}
+
+.score-panel {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+}
+
+.score-panel .panel-title {
+    align-self: flex-start;
 }
 
 @media (max-width: 850px) {
