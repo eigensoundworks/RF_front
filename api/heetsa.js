@@ -308,11 +308,14 @@ async function fetchSpenHeatmapHeadroom(lat, lon) {
     };
 
     const candidates = records
-      .map((record) => ({ record, headroomPct: getNumber(record), point: getPoint(record) }))
+      .map((record, index) => ({ record, index, headroomPct: getNumber(record), point: getPoint(record) }))
       .filter((item) => item.headroomPct !== null);
     if (!candidates.length) return null;
-    candidates.sort((a, b) => (a.point ? distance(a.point, { lat, lon }) : Infinity)
-      - (b.point ? distance(b.point, { lat, lon }) : Infinity));
+    candidates.sort((a, b) => {
+      const aDistance = a.point ? distance(a.point, { lat, lon }) : Infinity;
+      const bDistance = b.point ? distance(b.point, { lat, lon }) : Infinity;
+      return aDistance - bDistance || a.index - b.index;
+    });
     return {
       headroomPct: candidates[0].headroomPct,
       source: 'SP Energy Networks SPD capacity heatmap'
