@@ -4,25 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HEETSA Remote Triage Engine</title>
-    
-    <!-- Typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
         
-        <!-- Search Bar with EPC Apartment Dropdown -->
-<header class="top-search-bar glass-panel">
-    <div class="search-input-wrapper" style="position: relative;">
-        <input type="text" id="postcodeInput" placeholder="Type Street or Postcode (e.g., Ardgowan Street)" autocomplete="off">
-        <ul id="addressDropdown" class="autocomplete-dropdown hidden"></ul>
-    </div>
-    <button id="calculateBtn" class="neumorphic-btn-primary">
-        Calculate HEETSA Score
-    </button>
-</header>
+        <!-- Search Bar with Predictive Apartment Dropdown -->
+        <header class="top-search-bar glass-panel">
+            <div class="search-input-wrapper">
+                <input type="text" id="postcodeInput" placeholder="Type Apartment Address or Postcode (e.g., Ardgowan Street)" autocomplete="off">
+                <ul id="addressDropdown" class="autocomplete-dropdown hidden"></ul>
+            </div>
+            <button id="calculateBtn" class="neumorphic-btn-primary">
+                Calculate HEETSA Score
+            </button>
+        </header>
 
-        <!-- Main Dashboard Grid -->
+        <!-- Dashboard Grid -->
         <div class="dashboard-grid">
             
             <section class="score-panel glass-panel">
@@ -32,7 +33,7 @@
                     <span class="score-label">Target: Band C</span>
                 </div>
                 <div class="demand-sub" id="heatDemand">-- kWh/m²/yr</div>
-                <div class="epc-meta" id="epcMeta" style="font-weight: 700; color: var(--text-main);">Awaiting Property Data...</div>
+                <div class="epc-meta" id="epcMeta">Awaiting Property Data...</div>
             </section>
 
             <section class="glass-panel sandbox-panel">
@@ -42,7 +43,7 @@
                 <div class="action-row">
                     <div class="action-info">
                         <span class="action-title">Improve Loft Insulation</span>
-                        <span class="action-tag green">Sets U-Value to 0.11</span>
+                        <span class="action-tag">Sets U-Value to 0.11</span>
                     </div>
                     <label class="switch"><input type="checkbox" id="toggleLoft"><span class="slider"></span></label>
                 </div>
@@ -50,7 +51,7 @@
                 <div class="action-row">
                     <div class="action-info">
                         <span class="action-title">Internal Wall Insulation (IWI)</span>
-                        <span class="action-tag warning hidden" id="iwiWarning">⚠ High moisture risk. WUFI required.</span>
+                        <span class="action-tag">WUFI Moisture Risk Check</span>
                     </div>
                     <label class="switch"><input type="checkbox" id="toggleIWI"><span class="slider"></span></label>
                 </div>
@@ -58,7 +59,7 @@
                 <div class="action-row">
                     <div class="action-info">
                         <span class="action-title">External Wall Insulation (EWI)</span>
-                        <span class="action-tag locked hidden" id="ewiWarning">🔒 Listed/Conservation Area</span>
+                        <span class="action-tag">Conservation/Listing Check</span>
                     </div>
                     <label class="switch"><input type="checkbox" id="toggleEWI"><span class="slider"></span></label>
                 </div>
@@ -69,7 +70,7 @@
                 <div class="action-row">
                     <div class="action-info">
                         <span class="action-title">Air Source Heat Pump</span>
-                        <span class="action-tag locked" id="ashpGatekeeper">🔒 Requires Demand ≤ 70 kWh/m²</span>
+                        <span class="action-tag" id="ashpGatekeeper">🔒 Requires Demand ≤ 70 kWh/m²</span>
                     </div>
                     <label class="switch disabled-switch">
                         <input type="checkbox" id="toggleASHP" disabled>
@@ -86,7 +87,7 @@
                 <div class="triage-card">
                     <span class="triage-label">Winter Design Temp</span>
                     <span class="triage-value" id="designTemp">--</span>
-                    <span class="triage-source">Open-Meteo</span>
+                    <span class="triage-source">Open-Meteo API</span>
                 </div>
                 <div class="triage-card">
                     <span class="triage-label">Wind-Driven Rain</span>
@@ -101,7 +102,7 @@
             </div>
         </section>
 
-        <!-- Winter vs Summer Seasonal Comparison (No Months) -->
+        <!-- Winter vs Summer Seasonal Comparison -->
         <section class="glass-panel climate-section">
             <h2 class="panel-title">SEASONAL PERFORMANCE <span class="card-subtitle" style="display:inline; text-transform:none;">(Winter Heating vs. Summer Overheating Risk)</span></h2>
             <div class="seasonal-grid">
