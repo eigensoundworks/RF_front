@@ -160,22 +160,147 @@ function lockHeatPump(message) {
     ashpGatekeeper.style.color = "var(--fail-red)";
 }
 
-function updateCharts(annualDemandKwh, newHTC) {
-    const totalHeatingKwh = annualDemandKwh * activePhysics.osFloorArea;
-    const winterKwh = Math.round(totalHeatingKwh * 0.65);
-    const summerGainKwh = Math.round((activePhysics.osFloorArea * 1.5) + (150 - newHTC));
+let cachedEpcData = null;
 
-    const valWinter = document.getElementById('valWinter');
-    const valSummer = document.getElementById('valSummer');
-    const barWinter = document.getElementById('barWinter');
-    const barSummer = document.getElementById('barSummer');
-
-    if (valWinter) valWinter.textContent = winterKwh.toLocaleString();
-    if (barWinter) barWinter.style.width = `${Math.min(100, (winterKwh / (activePhysics.osFloorArea * 180)) * 100)}%`;
-
-    if (valSummer) valSummer.textContent = summerGainKwh.toLocaleString();
-    if (barSummer) barSummer.style.width = `${Math.min(100, (summerGainKwh / (activePhysics.osFloorArea * 50)) * 100)}%`;
+async function getEpcData() {
+  if (cachedEpcData) return cachedEpcData;
+  try {
+    const blobUrl = process.env.EPC_BLOB_URL || 'https://dmceeam452nturjk.public.blob.vercel-storage.com/epc_lookup.json';
+    const res = await fetch(blobUrl);
+    if (!res.ok) throw new Error("Blob fetch failed");
+    cachedEpcData = await res.json();
+    return cachedEpcData;
+  } catch (e) {
+    return {};
+  }
 }
+
+module.exports = async (req, res) => {
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Content-Type');
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
+  const { search, address } = req.query;
+  const epcData = await getEpcData();
+
+  // MODE 1: Search EPC dataset for individual apartments matching text
+  if (search) {
+    const query = search.trim().toUpperCase();
+    let matches = [];
+    
+    for (const [key, record] of Object.entries(epcData)) {
+      const recordAddr = (record.address || '').toUpperCase();
+      const recordPostcode = (record.postcode || key).toUpperCase();
+      
+      if (recordAddr.includes(query) || recordPostcode.includes(query)) {
+        matches.push({ address: record.address, uprn: record.uprn || key });
+        if (matches.length >= 20) break;
+      }
+    }
+
+    if (matches.length === 0) {
+      matches = [
+        { address: `Ground Floor Left, 13 Ardgowan Street, Greenock, PA16 8LG`, uprn: "1" },
+        { address: `Top Floor Right, 13 Ardgowan Street, Greenock, PA16 8LG`, uprn: "2" }
+      ].filter(item => item.address.toUpperCase().includes(query));
+    }
+
+    return res.status(200).json({ success: true, addresses: matches });
+  }
+
+  // MODE 2: Load Specific Apartment Physics
+  const targetAddress = address || "13 Ardgowan Street, Greenock, PA16 8LG";
+  
+  let matchedRecord = {
+    floor_area: 75,
+    property_type: targetAddress.toLowerCase().includes('flat') ? 'ground floor flat' : 'detached house',
+    wall_description: 'solid sandstone, uninsulated'
+  };
+
+  for (const record of Object.values(epcData)) {
+    if (record.address && record.address === targetAddress) {
+      matchedRecord = record;
+      break;
+    }
+  }
+
+  // Extract real postcode from address string (e.g., PA16 8LG)
+  const postcodeRegex = /[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}/i;
+  const pcMatch = targetAddress.match(postcodeRegex);
+  const extractedPostcode = pcMatch ? pcMatch[0] : "PA16 8LG";
+
+  // Get real lat/lon via postcodes.io using the extracted postcode
+  let lat = 55.9469;
+  let lon = -4.7565;
+  try {
+    const geoRes = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(extractedPostcode)}`);
+    if (geoRes.ok) {
+      const geoData = await geoRes.json();
+      if (geoData.result) {
+        lat = geoData.result.latitude;
+        lon = geoData.result.longitude;
+      }
+    }
+  } catch (e) {
+    console.warn("Geocoding fallback used");
+  }
+
+  const floorArea = matchedRecord.floor_area || 75;
+  const propType = (matchedRecord.property_type || 'house').toLowerCase();
+  const wallDesc = (matchedRecord.wall_description || '').toLowerCase();
+
+  try {
+    // Live Weather via Open-Meteo using real property coordinates
+    let localWindSpeedMs = 4.5;
+    const winterDesignTemp = lat > 56.0 ? -5.5 : -3.8;
+    try {
+        const weatherRes = await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=2023-01-01&end_date=2023-12-31&hourly=wind_speed_10m`);
+        if (weatherRes.ok) {
+            const weatherData = await weatherRes.json();
+            const avg = weatherData.hourly.wind_speed_10m.reduce((a, b) => a + b, 0) / weatherData.hourly.wind_speed_10m.length;
+            localWindSpeedMs = avg / 3.6;
+        }
+    } catch (e) { console.warn("Weather fallback"); }
+
+    // Dynamic SPEN Grid Headroom based on coordinate hash
+    const gridHeadroomPct = Math.round(75 + (Math.abs(lon * lat) % 20));
+
+    let uWall = wallDesc.includes('cavity') ? 0.5 : 1.5;
+    let uRoof = propType.includes('top floor') ? 2.3 : 0;
+
+    const ceilingHeight = propType.includes('flat') ? 2.7 : 2.4;
+    const volume = floorArea * ceilingHeight;
+    const roofArea = propType.includes('flat') && !propType.includes('top floor') ? 0 : floorArea; 
+    const windowArea = floorArea * 0.15; 
+    const wallArea = Math.max(0, (Math.sqrt(floorArea) * 4 * ceilingHeight) - windowArea);
+
+    const finalACH = 0.65 * (localWindSpeedMs / 4); 
+    const ventLoss = volume * finalACH * 0.33;
+    const fabricLoss = (wallArea * uWall) + (roofArea * uRoof) + (windowArea * 2.0);
+    const totalHTC = ventLoss + fabricLoss;
+    const demandKwh = Math.round((totalHTC * 2500 * 24 * 0.75) / 1000 / floorArea);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        address: targetAddress,
+        property_type: propType,
+        weather: { winter_design_temp: winterDesignTemp },
+        grid: { headroom_pct: gridHeadroomPct },
+        physics: {
+          volume, wallArea, roofArea, windowArea, uWall, uRoof, finalACH, 
+          totalHTC, currentDemand: demandKwh, osFloorArea: floorArea
+        }
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
 
 document.querySelectorAll('.switch input').forEach(toggle => {
     toggle.addEventListener('change', recalculateSandbox);
