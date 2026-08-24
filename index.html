@@ -22,39 +22,16 @@
         </header>
 
         <div class="dashboard-grid">
-            <div class="left-column-stack">
-                <section class="score-panel glass-panel">
-                    <h2 class="panel-title">HEETSA SCORE</h2>
-                    <div id="dialContainer" class="neumorphic-dial dial-pass">
-                        <span id="hrrScore" class="score-main">--</span>
-                        <span class="score-label" id="standardLabel">Target: 120 kWh/m²</span>
-                    </div>
-                    <div class="demand-sub" id="heatDemand">-- kWh/m²</div>
-                    <div class="epc-meta" id="epcMeta">Awaiting Property Data...</div>
-                    <div class="match-quality-banner hidden" id="matchQualityBanner"></div>
-                </section>
-
-                <section class="glass-panel climate-section">
-                    <h2 class="panel-title">EPC vs HEETSA vs REQUIRED STANDARD (120 kWh/m²)</h2>
-                    <div class="triage-data-grid">
-                        <div class="triage-card">
-                            <span class="triage-label">Current EPC Rating</span>
-                            <span class="triage-value" id="epcRating">--</span>
-                            <span class="triage-source"><span id="epcSourceLabel">EPC Register</span> <span class="source-badge" id="epcBadge"></span></span>
-                        </div>
-                        <div class="triage-card">
-                            <span class="triage-label">Calculated HEETSA Result</span>
-                            <span class="triage-value" id="heetsaBand">--</span>
-                            <span class="triage-source">From live physics model</span>
-                        </div>
-                        <div class="triage-card">
-                            <span class="triage-label">Required Standard</span>
-                            <span class="triage-value" id="requiredStandard">120 kWh/m²</span>
-                            <span class="triage-source" id="standardCompliance">--</span>
-                        </div>
-                    </div>
-                </section>
-            </div>
+            <section class="score-panel glass-panel">
+                <h2 class="panel-title">HEETSA SCORE</h2>
+                <div id="dialContainer" class="neumorphic-dial dial-pass">
+                    <span id="hrrScore" class="score-main">--</span>
+                    <span class="score-label" id="standardLabel">Target: 120 kWh/m²</span>
+                </div>
+                <div class="demand-sub" id="heatDemand">-- kWh/m²</div>
+                <div class="epc-meta" id="epcMeta">Awaiting Property Data...</div>
+                <div class="match-quality-banner hidden" id="matchQualityBanner"></div>
+            </section>
 
             <section class="glass-panel sandbox-panel">
                 <h2 class="panel-title">RETROFIT SANDBOX</h2>
@@ -94,6 +71,27 @@
                 </div>
             </section>
         </div>
+
+        <section class="glass-panel climate-section full-width-panel">
+            <h2 class="panel-title">EPC vs HEETSA vs REQUIRED STANDARD (120 kWh/m²)</h2>
+            <div class="triage-data-grid">
+                <div class="triage-card">
+                    <span class="triage-label">Current EPC Rating</span>
+                    <span class="triage-value" id="epcRating">--</span>
+                    <span class="triage-source"><span id="epcSourceLabel">EPC Register</span> <span class="source-badge" id="epcBadge"></span></span>
+                </div>
+                <div class="triage-card">
+                    <span class="triage-label">Calculated HEETSA Result</span>
+                    <span class="triage-value" id="heetsaBand">--</span>
+                    <span class="triage-source">From live physics model</span>
+                </div>
+                <div class="triage-card">
+                    <span class="triage-label">Required Standard</span>
+                    <span class="triage-value" id="requiredStandard">120 kWh/m²</span>
+                    <span class="triage-source" id="standardCompliance">--</span>
+                </div>
+            </div>
+        </section>
 
         <section class="glass-panel climate-section">
             <h2 class="panel-title">LOCAL CLIMATE & GRID CONSTRAINTS</h2>
