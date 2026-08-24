@@ -1,6 +1,5 @@
 const API_ENDPOINT = 'https://rf-back.vercel.app/api/heetsa';
 
-// DOM Elements
 const postcodeInput = document.getElementById('postcodeInput');
 const calculateBtn = document.getElementById('calculateBtn');
 const addressDropdown = document.getElementById('addressDropdown');
@@ -17,7 +16,6 @@ let activePropertyType = "";
 let gridCapacity = 100;
 let winterTemp = 0;
 
-// --- STEP 1: Address Autocomplete ---
 postcodeInput.addEventListener('input', (e) => {
     clearTimeout(debounceTimer);
     const val = e.target.value.trim();
@@ -31,7 +29,6 @@ postcodeInput.addEventListener('input', (e) => {
 async function fetchAddressList(postcode) {
     try {
         const response = await fetch(`${API_ENDPOINT}?postcode=${encodeURIComponent(postcode)}`);
-        if (!response.ok) throw new Error("Backend connection failed.");
         const result = await response.json();
         
         if (result.addresses && result.addresses.length > 0) {
@@ -55,49 +52,36 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// --- STEP 1b: Manual Button Click (Restored) ---
 calculateBtn.addEventListener('click', () => {
     const val = postcodeInput.value.trim();
     if (val.length >= 5) {
-        // If they just typed a postcode and clicked the button, load the default fallback address
-        loadSpecificProperty(val, '');
+        loadSpecificProperty(val, val);
     } else {
         alert("Please enter a valid Scottish postcode.");
     }
 });
 
-// --- STEP 2: Load Specific Property ---
 async function loadSpecificProperty(postcode, address) {
-    if (address) postcodeInput.value = address;
     addressDropdown.classList.add('hidden');
     hrrScoreEl.textContent = '...';
     epcMetaEl.textContent = 'Contacting HEETSA Engine...';
 
     try {
-        const fetchUrl = address ? 
-            `${API_ENDPOINT}?postcode=${encodeURIComponent(postcode)}&address=${encodeURIComponent(address)}` : 
-            `${API_ENDPOINT}?postcode=${encodeURIComponent(postcode)}`;
-            
-        const response = await fetch(fetchUrl);
+        const response = await fetch(`${API_ENDPOINT}?postcode=${encodeURIComponent(postcode)}&address=${encodeURIComponent(address)}`);
         const result = await response.json();
         
-        if (!response.ok || !result.success) {
-            throw new Error(result.error || "Failed to load property data.");
-        }
+        if (!response.ok || !result.success) throw new Error(result.error || "Failed to load.");
         
         activePhysics = result.data.physics;
         activePropertyType = result.data.property_type || "house";
-        gridCapacity = result.data.grid ? result.data.grid.headroom_pct : 100;
-        winterTemp = result.data.weather ? result.data.weather.winter_design_temp : -3.8;
+        gridCapacity = result.data.grid.headroom_pct;
+        winterTemp = result.data.weather.winter_design_temp;
 
-        // Populate Climate/Grid UI
         document.getElementById('designTemp').textContent = `${winterTemp}°C`;
         document.getElementById('gridHeadroom').textContent = `${gridCapacity}%`;
-        document.getElementById('rainExposure').textContent = "Severe"; // Static proxy for now
+        document.getElementById('rainExposure').textContent = "Severe";
 
-        // DYNAMIC TOGGLE FILTERING
         document.querySelectorAll('.action-row').forEach(row => row.style.display = 'flex'); 
-        
         if (activePropertyType.includes('ground floor') || activePropertyType.includes('mid floor')) {
             document.getElementById('toggleLoft').closest('.action-row').style.display = 'none';
         }
@@ -109,41 +93,27 @@ async function loadSpecificProperty(postcode, address) {
 
     } catch (error) {
         console.error("Property load error:", error);
-        alert(`API Error: ${error.message}\nMake sure your Vercel backend is deployed and running.`);
+        alert(`API Error: ${error.message}`);
         hrrScoreEl.textContent = 'ERR';
-        epcMetaEl.textContent = 'Connection Failed.';
     }
 }
 
-// --- STEP 3: Differential Sandbox & REAL Score ---
 function calculateMaxPotential() {
     if (!activePhysics) return;
-    
     let { volume, wallArea, roofArea, windowArea, finalACH, osFloorArea } = activePhysics;
-    
-    let bestUWall = 0.3; 
-    let bestURoof = roofArea > 0 ? 0.11 : activePhysics.uRoof;
-
-    const ventLoss = volume * finalACH * 0.33;
-    const fabricLoss = (wallArea * bestUWall) + (roofArea * bestURoof) + (windowArea * 2.0);
-    const minDemand = Math.round(((ventLoss + fabricLoss) * 2500 * 24 * 0.75) / 1000 / osFloorArea);
-    
+    const minDemand = Math.round((((volume * finalACH * 0.33) + (wallArea * 0.3) + (roofArea * 0.11) + (windowArea * 2.0)) * 2500 * 24 * 0.75) / 1000 / osFloorArea);
     let bestBand = minDemand <= 80 ? 'B' : (minDemand <= 120 ? 'C' : 'D');
     epcMetaEl.textContent = `Maximum Achievable Potential: ${minDemand} kWh/m²/yr (Band ${bestBand})`;
 }
 
 function recalculateSandbox() {
     if (!activePhysics) return;
-
     let { volume, wallArea, roofArea, windowArea, uWall, uRoof, finalACH, osFloorArea } = activePhysics;
 
     if (document.getElementById('toggleLoft').checked && roofArea > 0) uRoof = 0.11;
     if (document.getElementById('toggleIWI').checked || document.getElementById('toggleEWI').checked) uWall = 0.3;
 
-    const ventLoss = volume * finalACH * 0.33;
-    const fabricLoss = (wallArea * uWall) + (roofArea * uRoof) + (windowArea * 2.0);
-    const newHTC = ventLoss + fabricLoss;
-
+    const newHTC = (volume * finalACH * 0.33) + (wallArea * uWall) + (roofArea * uRoof) + (windowArea * 2.0);
     let currentDemand = Math.round((newHTC * 2500 * 24 * 0.75) / 1000 / osFloorArea);
     
     updateUI(currentDemand);
@@ -152,11 +122,7 @@ function recalculateSandbox() {
 
 function updateUI(demand) {
     const isDemandFailing = demand > 120;
-    
-    let currentBand = 'E';
-    if (demand <= 80) currentBand = 'B';
-    else if (demand <= 120) currentBand = 'C';
-    else if (demand <= 180) currentBand = 'D';
+    let currentBand = demand <= 80 ? 'B' : (demand <= 120 ? 'C' : 'D');
 
     hrrScoreEl.textContent = currentBand;
     heatDemandEl.textContent = `${demand} kWh/m²/yr`;
@@ -174,11 +140,11 @@ function updateUI(demand) {
     if (demand > 70) {
         lockHeatPump(`🔒 Requires Demand ≤ 70 kWh/m²`);
     } else if (gridCapacity < 85) {
-        lockHeatPump(`🔒 SPEN Grid Constrained (${gridCapacity}% Cap)`);
+        lockHeatPump(`🔒 SPEN Grid Constrained`);
     } else {
         toggleASHP.disabled = false;
         toggleASHP.closest('.switch').classList.remove('disabled-switch');
-        ashpGatekeeper.textContent = "✓ Fabric & Grid thresholds met";
+        ashpGatekeeper.textContent = "✓ Thresholds met";
         ashpGatekeeper.style.color = "var(--accent-green)";
     }
 }
@@ -208,20 +174,6 @@ function updateCharts(annualDemandKwh, newHTC) {
     document.getElementById('barJan').style.height = `${(jan / maxWinter) * 80}px`;
     document.getElementById('barFeb').style.height = `${(feb / maxWinter) * 80}px`;
     document.getElementById('barMar').style.height = `${(mar / maxWinter) * 80}px`;
-
-    const baselineGain = activePhysics.osFloorArea * 1.5;
-    const trappedGain = Math.round(baselineGain + (150 - newHTC)); 
-    const coolingDemand = Math.max(0, trappedGain - 50);
-
-    document.getElementById('valJunGain').textContent = `${trappedGain}kWh`;
-    document.getElementById('valJulGain').textContent = `${Math.round(trappedGain * 1.1)}kWh`;
-    document.getElementById('barJunGain').style.height = `${Math.min(80, trappedGain / 3)}px`;
-    document.getElementById('barJulGain').style.height = `${Math.min(80, (trappedGain * 1.1) / 3)}px`;
-
-    document.getElementById('valJunCool').textContent = `${coolingDemand}kWh`;
-    document.getElementById('valJulCool').textContent = `${Math.round(coolingDemand * 1.2)}kWh`;
-    document.getElementById('barJunCool').style.height = `${Math.min(80, coolingDemand / 2)}px`;
-    document.getElementById('barJulCool').style.height = `${Math.min(80, (coolingDemand * 1.2) / 2)}px`;
 }
 
 document.querySelectorAll('.switch input').forEach(toggle => {
